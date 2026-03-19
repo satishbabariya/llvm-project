@@ -139,32 +139,6 @@ inline SubstOptions operator|(SubstFlags lhs, SubstFlags rhs) {
   return SubstOptions(lhs) | rhs;
 }
 
-/// Enumeration describing foreign languages to which Swift may be
-/// bridged.
-enum class ForeignLanguage {
-  C,
-  ObjectiveC,
-};
-
-/// Describes how a particular type is representable in a foreign language.
-enum class ForeignRepresentableKind : uint8_t {
-  /// This type is not representable in the foreign language.
-  None,
-  /// This type is trivially representable in the foreign language.
-  Trivial,
-  /// This type is trivially representable as an object in the foreign
-  /// language.
-  Object,
-  /// This type is representable in the foreign language via bridging.
-  Bridged,
-  /// This type is representable in the foreign language via bridging
-  /// of Error.
-  BridgedError,
-  /// This type is representable in the foreign language via static
-  /// bridging code, only (which is not available at runtime).
-  StaticBridged,
-};
-
 /// Type - This is a simple value object that contains a pointer to a type
 /// class.  This is potentially sugared.  We use this throughout the codebase
 /// instead of a raw "TypeBase*" to disable equality comparison, which is unsafe
@@ -349,7 +323,6 @@ class CanType : public Type {
                                     SmallVectorImpl<ProtocolDecl*> &protocols);
   static void getAnyExistentialTypeProtocolsImpl(CanType type,
                                     SmallVectorImpl<ProtocolDecl*> &protocols);
-  static bool isObjCExistentialTypeImpl(CanType type);
   static CanType getAnyOptionalObjectTypeImpl(CanType type,
                                               OptionalTypeKind &kind);
   static CanType getReferenceStorageReferentImpl(CanType type);
@@ -411,11 +384,6 @@ public:
   void getAnyExistentialTypeProtocols(
                                 SmallVectorImpl<ProtocolDecl *> &protocols) {
     return getAnyExistentialTypeProtocolsImpl(*this, protocols);
-  }
-
-  /// Is this an ObjC-compatible existential type?
-  bool isObjCExistentialType() const {
-    return isObjCExistentialTypeImpl(*this);
   }
 
   ClassDecl *getClassOrBoundGenericClass() const; // in Types.h

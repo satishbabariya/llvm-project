@@ -161,14 +161,12 @@ private:
 };
   
 class DeclName;
-class ObjCSelector;
 
 } // end namespace swift
 
 namespace llvm {
   raw_ostream &operator<<(raw_ostream &OS, swift::Identifier I);
   raw_ostream &operator<<(raw_ostream &OS, swift::DeclName I);
-  raw_ostream &operator<<(raw_ostream &OS, swift::ObjCSelector S);
 
   // Identifiers hash just like pointers.
   template<> struct DenseMapInfo<swift::Identifier> {
@@ -415,98 +413,6 @@ public:
                             "only for use within the debugger");
 };
 
-/// Represents an Objective-C selector.
-class ObjCSelector {
-  /// The storage for an Objective-C selector.
-  ///
-  /// A zero-argument selector is represented as simple name.
-  /// A selector with N arguments is represented as a compound name with
-  /// N arguments, where the simple name is a placeholder.
-  DeclName Storage;
-
-  explicit ObjCSelector(DeclName storage) : Storage(storage) { }
-
-  friend struct llvm::DenseMapInfo<ObjCSelector>;
-
-public:
-  /// Form a selector with the given number of arguments and the given selector
-  /// pieces.
-  ObjCSelector(ASTContext &ctx, unsigned numArgs, ArrayRef<Identifier> pieces);
-
-  /// Determine the number of arguments in the selector.
-  ///
-  /// When this is zero, the number of selector pieces will be one. Otherwise,
-  /// it equals the number of selector pieces.
-  unsigned getNumArgs() const {
-    if (Storage.isSimpleName()) {
-      return 0;
-    }
-
-    return Storage.getArgumentNames().size();
-  }
-
-  /// Determine the number of selector pieces in the selector.
-  ///
-  /// When this is one, the number of arguments may either be zero or one.
-  /// Otherwise, it equals the number of arguments.
-  unsigned getNumSelectorPieces() const {
-    return getSelectorPieces().size();
-  }
-
-  /// Retrieve the pieces in this selector.
-  ArrayRef<Identifier> getSelectorPieces() const {
-    if (Storage.isSimpleName()) {
-      return { reinterpret_cast<const Identifier*>(&Storage), 1 };
-    }
-
-    return Storage.getArgumentNames();
-  }
-
-  /// Get a string representation of the selector.
-  ///
-  /// \param scratch Scratch space to use.
-  StringRef getString(llvm::SmallVectorImpl<char> &scratch) const;
-
-  void *getOpaqueValue() const { return Storage.getOpaqueValue(); }
-  static ObjCSelector getFromOpaqueValue(void *p) {
-    return ObjCSelector(DeclName::getFromOpaqueValue(p));
-  }
-
-  /// Dump this selector to standard error.
-  LLVM_ATTRIBUTE_DEPRECATED(void dump() const,
-                            "only for use within the debugger");
-
-  /// Compare two Objective-C selectors, producing -1 if \c *this comes before
-  /// \c other,  1 if \c *this comes after \c other, and 0 if they are equal.
-  int compare(ObjCSelector other) const {
-    return Storage.compare(other.Storage);
-  }
-
-  friend bool operator==(ObjCSelector lhs, ObjCSelector rhs) {
-    return lhs.getOpaqueValue() == rhs.getOpaqueValue();
-  }
-
-  friend bool operator!=(ObjCSelector lhs, ObjCSelector rhs) {
-    return !(lhs == rhs);
-  }
-
-  friend bool operator<(ObjCSelector lhs, ObjCSelector rhs) {
-    return lhs.compare(rhs) < 0;
-  }
-
-  friend bool operator<=(ObjCSelector lhs, ObjCSelector rhs) {
-    return lhs.compare(lhs) <= 0;
-  }
-
-  friend bool operator>(ObjCSelector lhs, ObjCSelector rhs) {
-    return lhs.compare(lhs) > 0;
-  }
-
-  friend bool operator>=(ObjCSelector lhs, ObjCSelector rhs) {
-    return lhs.compare(lhs) >= 0;
-  }
-};
-
 } // end namespace swift
 
 namespace llvm {
@@ -540,36 +446,6 @@ namespace llvm {
     }
   };
 
-  // An ObjCSelector is "pointer like".
-  template<typename T> class PointerLikeTypeTraits;
-  template<>
-  class PointerLikeTypeTraits<swift::ObjCSelector> {
-  public:
-    static inline void *getAsVoidPointer(swift::ObjCSelector name) {
-      return name.getOpaqueValue();
-    }
-    static inline swift::ObjCSelector getFromVoidPointer(void *ptr) {
-      return swift::ObjCSelector::getFromOpaqueValue(ptr);
-    }
-    enum { NumLowBitsAvailable = 0 };
-  };
-
-  // ObjCSelectors hash just like pointers.
-  template<> struct DenseMapInfo<swift::ObjCSelector> {
-    static swift::ObjCSelector getEmptyKey() {
-      return swift::ObjCSelector(DenseMapInfo<swift::DeclName>::getEmptyKey());
-    }
-    static swift::ObjCSelector getTombstoneKey() {
-      return swift::ObjCSelector(
-               DenseMapInfo<swift::DeclName>::getTombstoneKey());
-    }
-    static unsigned getHashValue(swift::ObjCSelector Val) {
-      return DenseMapInfo<void*>::getHashValue(Val.getOpaqueValue());
-    }
-    static bool isEqual(swift::ObjCSelector LHS, swift::ObjCSelector RHS) {
-      return LHS.getOpaqueValue() == RHS.getOpaqueValue();
-    }
-  };
 } // end namespace llvm
 
 #endif

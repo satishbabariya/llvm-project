@@ -32,7 +32,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TrailingObjects.h"
-#include "clang/Basic/VersionTuple.h"
+#include "llvm/Support/VersionTuple.h"
 
 namespace swift {
 class ASTPrinter;
@@ -184,20 +184,6 @@ protected:
   enum { NumDeclAttrBits = 10 };
   static_assert(NumDeclAttrBits <= 32, "fits in an unsigned");
 
-  class ObjCAttrBitFields {
-    friend class ObjCAttr;
-    unsigned : NumDeclAttrBits;
-
-    /// Whether this attribute has location information that trails the main
-    /// record, which contains the locations of the parentheses and any names.
-    unsigned HasTrailingLocationInfo : 1;
-
-    /// Whether the name is implicit, produced as the result of caching.
-    unsigned ImplicitName : 1;
-  };
-  enum { NumObjCAttrBits = NumDeclAttrBits + 2 };
-  static_assert(NumObjCAttrBits <= 32, "fits in an unsigned");
-
   class AccessibilityAttrBitFields {
     friend class AbstractAccessibilityAttr;
     unsigned : NumDeclAttrBits;
@@ -218,7 +204,6 @@ protected:
 
   union {
     DeclAttrBitFields DeclAttrBits;
-    ObjCAttrBitFields ObjCAttrBits;
     AccessibilityAttrBitFields AccessibilityAttrBits;
     AutoClosureAttrBitFields AutoClosureAttrBits;
   };
@@ -516,32 +501,6 @@ public:
   }
 };
 
-/// Defines the @_swift_native_objc_runtime_base attribute.
-///
-/// This attribute indicates a class that should be treated semantically
-/// as a native Swift root class, but which inherits a specific Objective-C
-/// class at runtime. For most classes this is the runtime's "SwiftObject"
-/// root class. The compiler does not need to know about the class; it's the
-/// build system's responsibility to link against the ObjC code that implements
-/// the root class, and the ObjC implementation's responsibility to ensure
-/// instances begin with a Swift-refcounting-compatible object header and
-/// override all the necessary NSObject refcounting methods.
-class SwiftNativeObjCRuntimeBaseAttr : public DeclAttribute {
-public:
-  SwiftNativeObjCRuntimeBaseAttr(Identifier BaseClassName,
-                                 SourceLoc AtLoc, SourceRange Range,
-                                 bool Implicit)
-    : DeclAttribute(DAK_SwiftNativeObjCRuntimeBase, AtLoc, Range, Implicit),
-      BaseClassName(BaseClassName) {}
-  
-  // The base class's name.
-  const Identifier BaseClassName;
-  
-  static bool classof(const DeclAttribute *DA) {
-    return DA->getKind() == DAK_SwiftNativeObjCRuntimeBase;
-  }
-};
-
 /// Determine the result of comparing an availability attribute to a specific
 /// platform or language version.
 enum class AvailableVersionComparison {
@@ -578,14 +537,14 @@ enum class PlatformAgnosticAvailabilityKind {
 class AvailableAttr : public DeclAttribute {
 public:
 #define INIT_VER_TUPLE(X)\
-  X(X.empty() ? Optional<clang::VersionTuple>() : X)
+  X(X.empty() ? Optional<llvm::VersionTuple>() : X)
 
   AvailableAttr(SourceLoc AtLoc, SourceRange Range,
                    PlatformKind Platform,
                    StringRef Message, StringRef Rename,
-                   const clang::VersionTuple &Introduced,
-                   const clang::VersionTuple &Deprecated,
-                   const clang::VersionTuple &Obsoleted,
+                   const llvm::VersionTuple &Introduced,
+                   const llvm::VersionTuple &Deprecated,
+                   const llvm::VersionTuple &Obsoleted,
                    PlatformAgnosticAvailabilityKind PlatformAgnostic,
                    bool Implicit)
     : DeclAttribute(DAK_Available, AtLoc, Range, Implicit),
@@ -611,13 +570,13 @@ public:
   const StringRef Rename;
 
   /// Indicates when the symbol was introduced.
-  const Optional<clang::VersionTuple> Introduced;
+  const Optional<llvm::VersionTuple> Introduced;
 
   /// Indicates when the symbol was deprecated.
-  const Optional<clang::VersionTuple> Deprecated;
+  const Optional<llvm::VersionTuple> Deprecated;
 
   /// Indicates when the symbol was obsoleted.
-  const Optional<clang::VersionTuple> Obsoleted;
+  const Optional<llvm::VersionTuple> Obsoleted;
 
   /// Indicates if the declaration has platform-agnostic availability.
   const PlatformAgnosticAvailabilityKind PlatformAgnostic;
@@ -675,158 +634,11 @@ public:
   createPlatformAgnostic(ASTContext &C, StringRef Message, StringRef Rename = "",
                       PlatformAgnosticAvailabilityKind Reason
                          = PlatformAgnosticAvailabilityKind::Unavailable,
-                         clang::VersionTuple Obsoleted
-                         = clang::VersionTuple());
+                         llvm::VersionTuple Obsoleted
+                         = llvm::VersionTuple());
 
   static bool classof(const DeclAttribute *DA) {
     return DA->getKind() == DAK_Available;
-  }
-};
-
-/// Indicates that the given declaration is visible to Objective-C.
-class ObjCAttr final : public DeclAttribute,
-    private llvm::TrailingObjects<ObjCAttr, SourceLoc> {
-  friend TrailingObjects;
-
-  /// The Objective-C name associated with this entity, stored in its opaque
-  /// representation so that we can use null as an indicator for "no name".
-  void *NameData;
-
-  /// Create an implicit @objc attribute with the given (optional) name.
-  explicit ObjCAttr(Optional<ObjCSelector> name, bool implicitName)
-    : DeclAttribute(DAK_ObjC, SourceLoc(), SourceRange(), /*Implicit=*/true),
-      NameData(nullptr)
-  {
-    ObjCAttrBits.HasTrailingLocationInfo = false;
-    ObjCAttrBits.ImplicitName = implicitName;
-
-    if (name) {
-      NameData = name->getOpaqueValue();
-    }
-  }
-
-  /// Create an @objc attribute written in the source.
-  ObjCAttr(SourceLoc atLoc, SourceRange baseRange, Optional<ObjCSelector> name,
-           SourceRange parenRange, ArrayRef<SourceLoc> nameLocs);
-
-  /// Determine whether this attribute has trailing location information.
-  bool hasTrailingLocationInfo() const {
-    return ObjCAttrBits.HasTrailingLocationInfo;
-  }
-
-  /// Retrieve the trailing location information.
-  MutableArrayRef<SourceLoc> getTrailingLocations() {
-    assert(hasTrailingLocationInfo() && "No trailing location information");
-    unsigned length = 2;
-    if (auto name = getName())
-      length += name->getNumSelectorPieces();
-    return {getTrailingObjects<SourceLoc>(), length};
-  }
-
-  /// Retrieve the trailing location information.
-  ArrayRef<SourceLoc> getTrailingLocations() const {
-    assert(hasTrailingLocationInfo() && "No trailing location information");
-    unsigned length = 2;
-    if (auto name = getName())
-      length += name->getNumSelectorPieces();
-    return {getTrailingObjects<SourceLoc>(), length};
-  }
-
-public:
-  /// Create implicit ObjC attribute with a given (optional) name.
-  static ObjCAttr *create(ASTContext &Ctx, Optional<ObjCSelector> name,
-                          bool implicitName);
-
-  /// Create an unnamed Objective-C attribute, i.e., @objc.
-  static ObjCAttr *createUnnamed(ASTContext &Ctx, SourceLoc AtLoc, 
-                                 SourceLoc ObjCLoc);
-
-  static ObjCAttr *createUnnamedImplicit(ASTContext &Ctx);
-
-  /// Create a nullary Objective-C attribute, which has a single name
-  /// with no colon following it.
-  ///
-  /// Note that a nullary Objective-C attribute may represent either a
-  /// selector for a zero-parameter function or some other Objective-C
-  /// entity, such as a class or protocol.
-  static ObjCAttr *createNullary(ASTContext &Ctx, SourceLoc AtLoc, 
-                                 SourceLoc ObjCLoc, SourceLoc LParenLoc, 
-                                 SourceLoc NameLoc, Identifier Name,
-                                 SourceLoc RParenLoc);
-
-  /// Create an implicit nullary Objective-C attribute, which has a
-  /// single name with no colon following it.
-  ///
-  /// Note that a nullary Objective-C attribute may represent either a
-  /// selector for a zero-parameter function or some other Objective-C
-  /// entity, such as a class or protocol.
-  static ObjCAttr *createNullary(ASTContext &Ctx, Identifier Name, 
-                                 bool isNameImplicit);
-
-  /// Create a "selector" Objective-C attribute, which has some number
-  /// of identifiers followed by colons.
-  static ObjCAttr *createSelector(ASTContext &Ctx, SourceLoc AtLoc, 
-                                  SourceLoc ObjCLoc, SourceLoc LParenLoc, 
-                                  ArrayRef<SourceLoc> NameLocs,
-                                  ArrayRef<Identifier> Names,
-                                  SourceLoc RParenLoc);
-
-  /// Create an implicit "selector" Objective-C attribute, which has
-  /// some number of identifiers followed by colons.
-  static ObjCAttr *createSelector(ASTContext &Ctx, ArrayRef<Identifier> Names,
-                                  bool isNameImplicit);
-
-  /// Determine whether this attribute has a name associated with it.
-  bool hasName() const { return NameData != nullptr; }
-
-  /// Retrieve the name of this entity, if specified.
-  Optional<ObjCSelector> getName() const {
-    if (!hasName())
-      return None;
-
-    return ObjCSelector::getFromOpaqueValue(NameData);
-  }
-
-  /// Determine whether the name associated with this attribute was
-  /// implicit.
-  bool isNameImplicit() const { return ObjCAttrBits.ImplicitName; }
-
-  /// Set the name of this entity.
-  void setName(ObjCSelector name, bool implicit) {
-    // If we already have a name and we have location information, make sure
-    // drop the location information rather than allowing it to corrupt our
-    // state
-    if (hasTrailingLocationInfo() &&
-        (!hasName() ||
-         getName()->getNumSelectorPieces() < name.getNumSelectorPieces())) {
-      ObjCAttrBits.HasTrailingLocationInfo = false;
-    }
-
-    NameData = name.getOpaqueValue();
-    ObjCAttrBits.ImplicitName = implicit;
-  }
-
-  /// Clear the name of this entity.
-  void clearName() {
-    NameData = nullptr;
-  }
-
-  /// Retrieve the source locations for the names in a non-implicit
-  /// nullary or selector attribute.
-  ArrayRef<SourceLoc> getNameLocs() const;
-
-  /// Retrieve the location of the opening parentheses, if there is one.
-  SourceLoc getLParenLoc() const;
-
-  /// Retrieve the location of the closing parentheses, if there is one.
-  SourceLoc getRParenLoc() const;
-
-  /// Clone the given attribute, producing an implicit copy of the
-  /// original without source location information.
-  ObjCAttr *clone(ASTContext &context) const;
-
-  static bool classof(const DeclAttribute *DA) {
-    return DA->getKind() == DAK_ObjC;
   }
 };
 
@@ -970,31 +782,6 @@ public:
 
   static bool classof(const DeclAttribute *DA) {
     return DA->getKind() == DAK_RawDocComment;
-  }
-};
-
-/// An attribute applied to a CoreFoundation class that is toll-free bridged to
-/// an Objective-C class.
-///
-/// This attribute is introduced by the Clang importer, and is therefore always
-/// implicit.
-class ObjCBridgedAttr : public DeclAttribute {
-  ClassDecl *ObjCClass;
-
-public:
-  ObjCBridgedAttr(ClassDecl *ObjCClass)
-    : DeclAttribute(DAK_ObjCBridged, SourceLoc(), SourceRange(),
-                    /*Implicit=*/true),
-      ObjCClass(ObjCClass)
-  {
-  }
-
-  /// Retrieve the Objective-C class to which this foreign class is toll-free
-  /// bridged.
-  ClassDecl *getObjCClass() const { return ObjCClass; }
-
-  static bool classof(const DeclAttribute *DA) {
-    return DA->getKind() == DAK_ObjCBridged;
   }
 };
 

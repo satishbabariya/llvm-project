@@ -19,7 +19,6 @@
 
 #include "swiftc/AST/AccessScope.h"
 #include "swiftc/AST/CaptureInfo.h"
-#include "swiftc/AST/ClangNode.h"
 #include "swiftc/AST/ConcreteDeclRef.h"
 #include "swiftc/AST/DefaultArgumentKind.h"
 #include "swiftc/AST/GenericSignature.h"
@@ -226,11 +225,6 @@ class alignas(1 << DeclAlignInBits) Decl {
     /// an implicit constructor in a struct.
     unsigned Implicit : 1;
 
-    /// \brief Whether this declaration was mapped directly from a Clang AST.
-    ///
-    /// Use getClangNode() to retrieve the corresponding Clang AST.
-    unsigned FromClang : 1;
-
     /// \brief Whether we've already performed early attribute validation.
     /// FIXME: This is ugly.
     unsigned EarlyAttrValidation : 1;
@@ -238,7 +232,7 @@ class alignas(1 << DeclAlignInBits) Decl {
     /// \brief Whether this declaration is currently being validated.
     unsigned BeingValidated : 1;
   };
-  enum { NumDeclBits = 11 };
+  enum { NumDeclBits = 10 };
   static_assert(NumDeclBits <= 32, "fits in an unsigned");
 
   class PatternBindingDeclBitfields {
@@ -504,11 +498,8 @@ class alignas(1 << DeclAlignInBits) Decl {
     /// it is implicit. This bit is used during parsing and type-checking to
     /// control inserting the implicit destructor.
     unsigned HasDestructorDecl : 1;
-
-    /// Whether the class has @objc ancestry.
-    unsigned ObjCClassKind : 3;
   };
-  enum { NumClassDeclBits = NumNominalTypeDeclBits + 11 };
+  enum { NumClassDeclBits = NumNominalTypeDeclBits + 8 };
   static_assert(NumClassDeclBits <= 32, "fits in an unsigned");
 
   class StructDeclBitfields {
@@ -649,29 +640,9 @@ protected:
     DeclBits.Kind = unsigned(kind);
     DeclBits.Invalid = false;
     DeclBits.Implicit = false;
-    DeclBits.FromClang = false;
     DeclBits.EarlyAttrValidation = false;
     DeclBits.BeingValidated = false;
   }
-
-  ClangNode getClangNodeImpl() const {
-    assert(DeclBits.FromClang);
-    return ClangNode::getFromOpaqueValue(
-        *(reinterpret_cast<void * const*>(this) - 1));
-  }
-
-  /// \brief Set the Clang node associated with this declaration.
-  void setClangNode(ClangNode Node) {
-    DeclBits.FromClang = true;
-    // Extra memory is allocated for this.
-    *(reinterpret_cast<void **>(this) - 1) = Node.getOpaqueValue();
-  }
-
-  void updateClangNode(ClangNode node) {
-    assert(hasClangNode());
-    setClangNode(node);
-  }
-  friend class ClangImporter;
 
   DeclContext *getDeclContextForModule() const;
 
@@ -819,39 +790,6 @@ public:
   /// \returns the brief comment attached to this declaration.
   StringRef getBriefComment() const;
 
-  /// \brief Returns true if there is a Clang AST node associated
-  /// with self.
-  bool hasClangNode() const {
-    return DeclBits.FromClang;
-  }
-
-  /// \brief Retrieve the Clang AST node from which this declaration was
-  /// synthesized, if any.
-  ClangNode getClangNode() const {
-    if (!DeclBits.FromClang)
-      return ClangNode();
-
-    return getClangNodeImpl();
-  }
-
-  /// \brief Retrieve the Clang declaration from which this declaration was
-  /// synthesized, if any.
-  const clang::Decl *getClangDecl() const {
-    if (!DeclBits.FromClang)
-      return nullptr;
-
-    return getClangNodeImpl().getAsDecl();
-  }
-
-  /// \brief Retrieve the Clang macro from which this declaration was
-  /// synthesized, if any.
-  const clang::MacroInfo *getClangMacro() {
-    if (!DeclBits.FromClang)
-      return nullptr;
-
-    return getClangNodeImpl().getAsMacro();
-  }
-
   bool isPrivateStdlibDecl(bool whitelistProtocols=true) const;
 
   /// Whether this declaration is weak-imported.
@@ -878,23 +816,13 @@ public:
   }
 };
 
-/// \brief Allocates memory for a Decl with the given \p baseSize. If necessary,
-/// it includes additional space immediately preceding the Decl for a ClangNode.
-/// \note \p baseSize does not need to include space for a ClangNode if
-/// requested -- the necessary space will be added automatically.
+/// \brief Allocates memory for a Decl with the given \p baseSize.
 template <typename DeclTy, typename AllocatorTy>
-void *allocateMemoryForDecl(AllocatorTy &allocator, size_t baseSize,
-                            bool includeSpaceForClangNode) {
+void *allocateMemoryForDecl(AllocatorTy &allocator, size_t baseSize) {
   static_assert(alignof(DeclTy) >= sizeof(void *),
                 "A pointer must fit in the alignment of the DeclTy!");
 
-  size_t size = baseSize;
-  if (includeSpaceForClangNode)
-    size += alignof(DeclTy);
-
-  void *mem = allocator.Allocate(size, alignof(DeclTy));
-  if (includeSpaceForClangNode)
-    mem = reinterpret_cast<char *>(mem) + alignof(DeclTy);
+  void *mem = allocator.Allocate(baseSize, alignof(DeclTy));
   return mem;
 }
 
@@ -3103,21 +3031,6 @@ enum class ArtificialMainKind : uint8_t {
   UIApplicationMain,
 };
 
-enum class ObjCClassKind : uint8_t {
-  /// Neither the class nor any of its superclasses are @objc.
-  NonObjC,
-  /// One of the superclasses is @objc but another superclass or the
-  /// class itself has generic parameters, so while it cannot be
-  /// directly represented in Objective-C, it has implicitly @objc
-  /// members.
-  ObjCMembers,
-  /// The top-level ancestor of this class is not @objc, but the
-  /// class itself is.
-  ObjCWithSwiftRoot,
-  /// The class is bona-fide @objc.
-  ObjC,
-};
-
 /// ClassDecl - This is the declaration of a class, for example:
 ///
 ///    class Complex { var R : Double, I : Double }
@@ -3125,13 +3038,7 @@ enum class ObjCClassKind : uint8_t {
 /// The type of the decl itself is a MetatypeType; use getDeclaredType()
 /// to get the declared type ("Complex" in the above example).
 class ClassDecl : public NominalTypeDecl {
-  class ObjCMethodLookupTable;
-
   SourceLoc ClassLoc;
-  ObjCMethodLookupTable *ObjCMethodLookup = nullptr;
-
-  /// Create the Objective-C member lookup table.
-  void createObjCMethodLookup();
 
   struct {
     /// The superclass type and a bit to indicate whether the
@@ -3254,15 +3161,6 @@ public:
   /// required for name lookup.
   bool inheritsSuperclassInitializers(LazyResolver *resolver);
 
-  /// Figure out if this class has any @objc ancestors, in which case it should
-  /// have implicitly @objc members. Note that a class with generic ancestry
-  /// might have implicitly @objc members, but will never itself be @objc.
-  ObjCClassKind checkObjCAncestry() const;
-
-  /// Retrieve the name to use for this class when interoperating with
-  /// the Objective-C runtime.
-  StringRef getObjCRuntimeName(llvm::SmallVectorImpl<char> &buffer) const;
-
   /// Returns the appropriate kind of entry point to generate for this class,
   /// based on its attributes.
   ///
@@ -3271,24 +3169,6 @@ public:
   ArtificialMainKind getArtificialMainKind() const;
 
   using NominalTypeDecl::lookupDirect;
-
-  /// Look in this class and its extensions (but not any of its protocols or
-  /// superclasses) for declarations with a given Objective-C selector.
-  ///
-  /// Note that this can find methods, initializers, deinitializers,
-  /// getters, and setters.
-  ///
-  /// \param selector The Objective-C selector of the method we're
-  /// looking for.
-  ///
-  /// \param isInstance Whether we are looking for an instance method
-  /// (vs. a class method).
-  MutableArrayRef<AbstractFunctionDecl *> lookupDirect(ObjCSelector selector,
-                                                       bool isInstance);
-
-  /// Record the presence of an @objc method whose Objective-C name has been
-  /// finalized.
-  void recordObjCMethod(AbstractFunctionDecl *method);
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) {

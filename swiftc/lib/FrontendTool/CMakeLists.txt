@@ -10,9 +10,4 @@ add_swiftc_library(swiftcFrontendTool
   LINK_COMPONENTS
   Option
   Support
-
-  CLANG_LIBS
-  clangBasic
-  clangOptions
-  clangDriver
 )

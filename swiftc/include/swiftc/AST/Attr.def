@@ -56,7 +56,6 @@ TYPE_ATTR(guaranteed)
 TYPE_ATTR(autoreleased)
 TYPE_ATTR(callee_owned)
 TYPE_ATTR(callee_guaranteed)
-TYPE_ATTR(objc_metatype)
 TYPE_ATTR(opened)
 TYPE_ATTR(pseudogeneric)
 
@@ -91,10 +90,6 @@ DECL_ATTR(available, Available,
 SIMPLE_DECL_ATTR(final, Final,
                  OnClass | OnFunc | OnVar | OnSubscript|DeclModifier, 2)
 
-DECL_ATTR(objc, ObjC,
-          OnFunc | OnClass | OnProtocol | OnVar | OnSubscript |
-          OnConstructor | OnDestructor | OnEnum | OnEnumElement, 3)
-
 SIMPLE_DECL_ATTR(required, Required,
                  OnConstructor|DeclModifier, 4)
 
@@ -109,33 +104,10 @@ SIMPLE_DECL_ATTR(_exported, Exported, OnImport | UserInaccessible, 8)
 
 /// NOTE: 9 is unused.
 
-SIMPLE_DECL_ATTR(NSCopying, NSCopying,
-                 OnVar, 10)
-
-SIMPLE_DECL_ATTR(IBAction, IBAction,
-                 OnFunc, 11)
-
-SIMPLE_DECL_ATTR(IBDesignable, IBDesignable,
-                 OnClass | OnExtension, 12)
-
-SIMPLE_DECL_ATTR(IBInspectable, IBInspectable,
-                 OnVar, 13)
-
-SIMPLE_DECL_ATTR(IBOutlet, IBOutlet,
-                 OnVar, 14)
-
-SIMPLE_DECL_ATTR(NSManaged, NSManaged, OnVar | OnFunc, 15)
-
 SIMPLE_DECL_ATTR(lazy, Lazy, OnVar|DeclModifier, 16)
 
 SIMPLE_DECL_ATTR(LLDBDebuggerFunction, LLDBDebuggerFunction, OnFunc |
                 UserInaccessible, 17)
-
-SIMPLE_DECL_ATTR(UIApplicationMain, UIApplicationMain,
-                 OnClass, 18)
-
-SIMPLE_DECL_ATTR(unsafe_no_objc_tagged_pointer, UnsafeNoObjCTaggedPointer,
-                 OnProtocol | UserInaccessible, 19)
 
 DECL_ATTR(inline, Inline, OnFunc | OnConstructor, 20)
 
@@ -156,9 +128,6 @@ SIMPLE_DECL_ATTR(requires_stored_property_inits, RequiresStoredPropertyInits,
                  OnClass, 27)
 DECL_ATTR(autoclosure, AutoClosure, OnParam, 28)
 SIMPLE_DECL_ATTR(noescape, NoEscape, OnParam, 29)
-
-SIMPLE_DECL_ATTR(nonobjc, NonObjC,
-                 OnFunc | OnVar | OnSubscript | OnConstructor, 30)
 
 SIMPLE_DECL_ATTR(_fixed_layout, FixedLayout,
                  OnVar | OnClass | OnStruct | OnEnum | UserInaccessible, 31)
@@ -214,15 +183,6 @@ DECL_ATTR_ALIAS(unowned, Ownership)
 DECL_ATTR(effects, Effects, OnFunc | OnConstructor | OnDestructor |
           UserInaccessible, 50)
 
-DECL_ATTR(__objc_bridged, ObjCBridged, OnClass | NotSerialized | RejectByParser,
-          /* Not serialized */51)
-
-SIMPLE_DECL_ATTR(NSApplicationMain, NSApplicationMain,
-                 OnClass, 52)
-
-SIMPLE_DECL_ATTR(objc_non_lazy_realization, ObjCNonLazyRealization,
-                 OnClass, 53)
-
 DECL_ATTR(__synthesized_protocol, SynthesizedProtocol,
           OnStruct | OnEnum | OnClass | NotSerialized | RejectByParser,
           /* Not serialized */54)
@@ -235,9 +195,6 @@ DECL_ATTR(_alignment, Alignment, OnStruct | OnEnum | UserInaccessible, 56)
 
 SIMPLE_DECL_ATTR(rethrows, Rethrows,
                  OnFunc | OnConstructor | RejectByParser, 57)
-
-DECL_ATTR(_swift_native_objc_runtime_base, SwiftNativeObjCRuntimeBase,
-          OnClass | UserInaccessible, 59)
 
 SIMPLE_DECL_ATTR(indirect, Indirect,
                  OnEnum | OnEnumElement | DeclModifier,
@@ -262,8 +219,6 @@ SIMPLE_DECL_ATTR(_versioned, Versioned,
 
 SIMPLE_DECL_ATTR(discardableResult, DiscardableResult,
                  OnFunc | OnConstructor | LongAttribute, 65)
-
-SIMPLE_DECL_ATTR(GKInspectable, GKInspectable, OnVar, 66)
 
 #undef TYPE_ATTR
 #undef DECL_ATTR_ALIAS

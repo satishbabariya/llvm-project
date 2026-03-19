@@ -20,7 +20,7 @@
 
 #include "swiftc/Basic/LLVM.h"
 #include "swiftc/Basic/Version.h"
-#include "clang/Basic/VersionTuple.h"
+#include "llvm/Support/VersionTuple.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -85,16 +85,6 @@ namespace swift {
     ///
     /// Flags for use by tests
     ///
-
-    /// Enable Objective-C Runtime interop code generation and build
-    /// configuration options.
-    bool EnableObjCInterop = true;
-
-    /// Enables checking that uses of @objc require importing
-    /// the Foundation module.
-    /// This is enabled by default because SILGen can crash in such a case, but
-    /// it gets disabled when compiling the Swift core stdlib.
-    bool EnableObjCAttrRequiresFoundation = true;
 
     /// If true, <code>@testable import Foo</code> produces an error if \c Foo
     /// was not compiled with -enable-testing.
@@ -174,7 +164,7 @@ namespace swift {
     ///
     /// This is only implemented on certain OSs. If no target has been
     /// configured, returns v0.0.0.
-    clang::VersionTuple getMinPlatformVersion() const {
+    llvm::VersionTuple getMinPlatformVersion() const {
       unsigned major, minor, revision;
       if (Target.isMacOSX()) {
         Target.getMacOSXVersion(major, minor, revision);
@@ -189,15 +179,14 @@ namespace swift {
       } else {
         llvm_unreachable("Unsupported target OS");
       }
-      return clang::VersionTuple(major, minor, revision);
+      return llvm::VersionTuple(major, minor, revision);
     }
 
     /// Sets an implicit platform condition.
     ///
-    /// There are currently three supported platform conditions:
+    /// There are currently two supported platform conditions:
     /// - os: The active os target (OSX or iOS)
     /// - arch: The active arch target (x86_64, i386, arm, arm64)
-    /// - _runtime: Runtime support (_ObjC or _Native)
     void addPlatformConditionValue(StringRef Name, StringRef Value) {
       assert(!Name.empty() && !Value.empty());
       PlatformConditionValues.emplace_back(Name, Value);

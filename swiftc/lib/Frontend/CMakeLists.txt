@@ -17,8 +17,4 @@ add_swiftc_library(swiftcFrontend
   Support
   Target
   TargetParser
-
-  CLANG_LIBS
-  clangBasic
-  clangOptions
 )
