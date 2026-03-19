@@ -1,52 +1,32 @@
-//===-- swiftc/AST/AST.h - AST Node Definitions -----------------*- C++ -*-===//
+//===--- AST.h - Umbrella Header for AST Library ----------------*- C++ -*-===//
 //
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// This source file is part of the Swift.org open source project
+//
+// Copyright (c) 2014 - 2017 Apple Inc. and the Swift project authors
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+// See https://swift.org/LICENSE.txt for license information
+// See https://swift.org/CONTRIBUTORS.txt for the list of Swift project authors
+//
+//===----------------------------------------------------------------------===//
+//
+// This file includes the AST data structure headers.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SWIFTC_AST_AST_H
-#define SWIFTC_AST_AST_H
+#ifndef SWIFTC_AST_H
+#define SWIFTC_AST_H
 
-#include "llvm/ADT/StringRef.h"
-#include <memory>
-#include <string>
-#include <vector>
+#include "swiftc/AST/ASTContext.h"
+#include "swiftc/AST/AvailabilitySpec.h"
+#include "swiftc/AST/Builtins.h"
+#include "swiftc/AST/Decl.h"
+#include "swiftc/AST/Expr.h"
+#include "swiftc/AST/Module.h"
+#include "swiftc/AST/ParameterList.h"
+#include "swiftc/AST/Pattern.h"
+#include "swiftc/AST/Stmt.h"
+#include "swiftc/AST/Types.h"
+#include "swiftc/AST/TypeRepr.h"
 
-namespace Swift {
-namespace ast {
-
-class ASTNode {
-public:
-  enum class Kind {
-    Module,
-    Function,
-    Variable,
-    Expression,
-    Statement,
-  };
-
-  ASTNode(Kind kind) : kind(kind) {}
-  virtual ~ASTNode();
-
-  Kind getKind() const { return kind; }
-
-private:
-  Kind kind;
-};
-
-class ModuleDecl : public ASTNode {
-  std::string name;
-
-public:
-  ModuleDecl(llvm::StringRef name)
-      : ASTNode(Kind::Module), name(name.str()) {}
-
-  llvm::StringRef getName() const { return name; }
-};
-
-} // namespace ast
-} // namespace Swift
-
-#endif // SWIFTC_AST_AST_H
+#endif
