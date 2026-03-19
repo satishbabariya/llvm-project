@@ -898,49 +898,10 @@ ERROR(transparent_in_protocols_not_supported,none,
 ERROR(transparent_in_classes_not_supported,none,
       "@_transparent is not supported on declarations within classes", ())
 
-ERROR(invalid_iboutlet,none,
-      "only instance properties can be declared @IBOutlet", ())
-ERROR(iboutlet_nonobjc_class,none,
-      "@IBOutlet property cannot %select{have|be an array of}0 "
-      "non-'@objc' class type %1", (bool, Type))
-ERROR(iboutlet_nonobjc_protocol,none,
-      "@IBOutlet property cannot %select{have|be an array of}0 "
-      "non-'@objc' protocol type %1", (bool, Type))
-ERROR(iboutlet_nonobject_type,none,
-      "@IBOutlet property cannot %select{have|be an array of}0 "
-      "non-object type %1", (bool, Type))
-ERROR(iboutlet_only_mutable,none,
-      "@IBOutlet attribute requires property to be mutable", ())
-ERROR(iboutlet_non_optional,none,
-      "@IBOutlet property has non-optional type %0", (Type))
 NOTE(note_make_optional,none,
       "add '?' to form the optional type %0", (Type))
 NOTE(note_make_implicitly_unwrapped_optional,none,
       "add '!' to form the implicitly unwrapped optional type %0", (Type))
-
-ERROR(invalid_ibdesignable_extension,none,
-      "@IBDesignable can only be applied to classes and extensions "
-      "of classes", ())
-ERROR(invalid_ibinspectable,none,
-      "only instance properties can be declared @%0", (StringRef))
-ERROR(invalid_ibaction_decl,none,
-      "only instance methods can be declared @IBAction", ())
-ERROR(invalid_ibaction_result,none,
-      "methods declared @IBAction must return 'Void' (not %0)", (Type))
-ERROR(invalid_ibaction_argument_count,none,
-      "@IBAction methods %select{must have a single argument"
-      "|can only have up to 2 arguments}0", (bool))
-ERROR(ibaction_nonobjc_class_argument,none,
-      "argument to @IBAction method cannot have non-'@objc' class type %0",
-      (Type))
-ERROR(ibaction_nonobject_argument,none,
-      "argument to @IBAction method cannot have non-object type %0", (Type))
-ERROR(no_objc_tagged_pointer_not_class_protocol,none,
-      "@unsafe_no_objc_tagged_pointer can only be applied to class protocols",
-      ())
-ERROR(swift_native_objc_runtime_base_not_on_root_class,none,
-      "@_swift_native_objc_runtime_base_not_on_root_class can only be applied "
-      "to root classes", ())
 
 ERROR(cdecl_not_at_top_level,none,
       "@_cdecl can only be applied to global functions", ())
@@ -997,11 +958,6 @@ ERROR(attribute_does_not_apply_to_type,none,
       "attribute does not apply to type", ())
 ERROR(optional_attribute_non_protocol,none,
       "'optional' can only be applied to protocol members", ())
-ERROR(optional_attribute_non_objc_protocol,none,
-      "'optional' can only be applied to members of an @objc protocol", ())
-ERROR(optional_attribute_missing_explicit_objc,none,
-      "'optional' requirements are an Objective-C compatibility feature; add '@objc'",
-      ())
 ERROR(optional_attribute_initializer,none,
       "'optional' cannot be applied to an initializer", ())
 ERROR(unavailable_method_non_objc_protocol,none,

@@ -969,100 +969,6 @@ bool Parser::parseNewDeclAttribute(DeclAttributes &Attributes, SourceLoc AtLoc,
     break;
   }
 
-  case DAK_ObjC: {
-    // Unnamed @objc attribute.
-    if (Tok.isNot(tok::l_paren)) {
-      auto attr = ObjCAttr::createUnnamed(Context, AtLoc, Loc);
-      Attributes.add(attr);
-      break;
-    }
-
-    // Parse the leading '('.
-    SourceLoc LParenLoc = consumeToken(tok::l_paren);
-
-    // Parse the names, with trailing colons (if there are present).
-    SmallVector<Identifier, 4> Names;
-    SmallVector<SourceLoc, 4> NameLocs;
-    bool sawColon = false;
-    while (true) {
-      // Empty selector piece.
-      if (Tok.is(tok::colon)) {
-        Names.push_back(Identifier());
-        NameLocs.push_back(Tok.getLoc());
-        sawColon = true;
-        consumeToken();
-        continue;
-      }
-
-      // Name.
-      if (Tok.is(tok::identifier) || Tok.isKeyword()) {
-        Names.push_back(Context.getIdentifier(Tok.getText()));
-        NameLocs.push_back(Tok.getLoc());
-        consumeToken();
-
-        // If we have a colon, consume it.
-        if (Tok.is(tok::colon)) {
-          consumeToken();
-          sawColon = true;
-          continue;
-        } 
-        
-        // If we see a closing parentheses, we're done.
-        if (Tok.is(tok::r_paren)) {
-          // If we saw more than one identifier, there's a ':'
-          // missing here. Complain and pretend we saw it.
-          if (Names.size() > 1) {
-            diagnose(Tok, diag::attr_objc_missing_colon)
-              .fixItInsertAfter(NameLocs.back(), ":");
-            sawColon = true;
-          }
-
-          break;
-        }
-
-        // If we see another identifier or keyword, complain about
-        // the missing colon and keep going.
-        if (Tok.is(tok::identifier) || Tok.isKeyword()) {
-          diagnose(Tok, diag::attr_objc_missing_colon)
-            .fixItInsertAfter(NameLocs.back(), ":");
-          sawColon = true;
-          continue;
-        }
-
-        // We don't know what happened. Break out.
-        break;
-      }
-
-      break;
-    }
-    
-    // Parse the matching ')'.
-    SourceLoc RParenLoc;
-    bool Invalid = parseMatchingToken(tok::r_paren, RParenLoc,
-                                      diag::attr_objc_expected_rparen,
-                                      LParenLoc);
-
-    ObjCAttr *attr;
-    if (Names.empty()) {
-      // When there are no names, recover as if there were no parentheses.
-      if (!Invalid)
-        diagnose(LParenLoc, diag::attr_objc_empty_name);
-      attr = ObjCAttr::createUnnamed(Context, AtLoc, Loc);
-    } else if (!sawColon) {
-      // When we didn't see a colon, this is a nullary name.
-      assert(Names.size() == 1 && "Forgot to set sawColon?");
-      attr = ObjCAttr::createNullary(Context, AtLoc, Loc, LParenLoc,
-                                     NameLocs.front(), Names.front(),
-                                     RParenLoc);
-    } else {
-      // When we did see a colon, this is a selector.
-      attr = ObjCAttr::createSelector(Context, AtLoc, Loc, LParenLoc,
-                                      NameLocs, Names, RParenLoc);
-    }
-    Attributes.add(attr);
-    break;
-  }
-
   case DAK_Specialize: {
     if (Tok.isNot(tok::l_paren)) {
       diagnose(Loc, diag::attr_expected_lparen, AttrName,
@@ -1462,7 +1368,6 @@ bool Parser::parseTypeAttribute(TypeAttributes &Attributes, bool justChecking) {
   case TAK_autoreleased:
   case TAK_callee_owned:
   case TAK_callee_guaranteed:
-  case TAK_objc_metatype:
     if (!isInSILMode()) {
       diagnose(Loc, diag::only_allowed_in_sil, Text);
       return false;
@@ -2186,15 +2091,6 @@ ParserStatus Parser::parseDecl(ParseDeclOptions Flags,
 
     // If we 'break' out of the switch, break out of the loop too.
     break;
-  }
-
-  if (auto SF = CurDeclContext->getParentSourceFile()) {
-    if (!getScopeInfo().isInactiveConfigBlock()) {
-      for (auto Attr : Attributes) {
-        if (isa<ObjCAttr>(Attr) || isa<DynamicAttr>(Attr))
-          SF->AttrsRequiringFoundation.insert(Attr);
-      }
-    }
   }
 
   if (FoundCCTokenInAttr) {
