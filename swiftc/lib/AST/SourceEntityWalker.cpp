@@ -22,7 +22,6 @@
 #include "swiftc/AST/TypeRepr.h"
 #include "swiftc/AST/Types.h"
 #include "swiftc/Basic/SourceManager.h"
-#include "clang/Basic/Module.h"
 
 using namespace swift;
 
@@ -58,7 +57,7 @@ private:
 
   bool handleImports(ImportDecl *Import);
   bool passModulePathElements(ArrayRef<ImportDecl::AccessPathElement> Path,
-                              const clang::Module *ClangMod);
+                              const void *ClangMod);
 
   bool passReference(ValueDecl *D, Type Ty, DeclNameLoc Loc, SemaReferenceKind Kind);
   bool passReference(ModuleEntity Mod, std::pair<Identifier, SourceLoc> IdLoc);
@@ -376,15 +375,12 @@ bool SemaAnnotator::handleImports(ImportDecl *Import) {
 
 bool SemaAnnotator::passModulePathElements(
     ArrayRef<ImportDecl::AccessPathElement> Path,
-    const clang::Module *ClangMod) {
+    const void *ClangMod) {
 
   if (Path.empty() || !ClangMod)
     return true;
 
-  if (!passModulePathElements(Path.drop_back(1), ClangMod->Parent))
-    return false;
-
-  return passReference(ClangMod, Path.back());
+  return true;
 }
 
 bool SemaAnnotator::passSubscriptReference(ValueDecl *D, SourceLoc Loc,

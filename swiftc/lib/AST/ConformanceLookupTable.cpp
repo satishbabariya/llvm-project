@@ -520,21 +520,6 @@ void ConformanceLookupTable::expandImpliedConformances(NominalTypeDecl *nominal,
         resolver->resolveInheritanceClause(cast<ExtensionDecl>(dc));
     }
 
-    // An @objc enum that explicitly conforms to the Error protocol
-    // also implicitly conforms to _ObjectiveCBridgeableError, via the
-    // known protocol _BridgedNSError.
-    if (conformingProtocol->isSpecificProtocol(
-          KnownProtocolKind::Error) &&
-        isa<EnumDecl>(nominal) && nominal->isObjC() &&
-        cast<EnumDecl>(nominal)->hasOnlyCasesWithoutAssociatedValues()) {
-      ASTContext &ctx = nominal->getASTContext();
-      if (auto bridgedNSError
-            = ctx.getProtocol(KnownProtocolKind::BridgedNSError)) {
-        addProtocol(nominal, bridgedNSError, SourceLoc(),
-                    ConformanceSource::forImplied(conformanceEntry));
-      }
-    }
-
     // Add inherited protocols.
     addProtocols(nominal, conformingProtocol->getInherited(),
                  ConformanceSource::forImplied(conformanceEntry),

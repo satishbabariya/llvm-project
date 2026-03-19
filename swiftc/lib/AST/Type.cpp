@@ -15,7 +15,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "swiftc/AST/Types.h"
-#include "ForeignRepresentationInfo.h"
 #include "swiftc/AST/TypeVisitor.h"
 #include "swiftc/AST/TypeWalker.h"
 #include "swiftc/AST/Decl.h"
@@ -1981,6 +1980,12 @@ bool TypeBase::isPotentiallyBridgedValueType() {
 /// Determine whether this is a representable Objective-C object type.
 static ForeignRepresentableKind
 getObjCObjectRepresentable(Type type, const DeclContext *dc) {
+  return ForeignRepresentableKind::None;
+}
+
+#if 0 // ObjC interop removed
+static ForeignRepresentableKind
+getObjCObjectRepresentable_REMOVED(Type type, const DeclContext *dc) {
   // @objc metatypes are representable when their instance type is.
   if (auto metatype = type->getAs<AnyMetatypeType>()) {
     auto instanceType = metatype->getInstanceType();
@@ -2038,28 +2043,24 @@ getObjCObjectRepresentable(Type type, const DeclContext *dc) {
 
   return ForeignRepresentableKind::None;
 }
+#endif // ObjC interop removed
 
 /// Determine the foreign representation of this type.
-///
-/// This function determines when and how a particular type is mapped
-/// into a foreign language. Any changes to the logic here also need
-/// to be reflected in PrintAsObjC, so that the Swift type will be
-/// properly printed for (Objective-)C and in SIL's bridging logic.
 static std::pair<ForeignRepresentableKind, ProtocolConformance *>
 getForeignRepresentable(Type type, ForeignLanguage language,
+                        const DeclContext *dc) {
+  return { ForeignRepresentableKind::None, nullptr };
+}
+
+#if 0 // ObjC interop removed
+static std::pair<ForeignRepresentableKind, ProtocolConformance *>
+getForeignRepresentable_REMOVED(Type type, ForeignLanguage language,
                         const DeclContext *dc) {
   // Look through one level of optional type, but remember that we did.
   bool wasOptional = false;
   if (auto valueType = type->getAnyOptionalObjectType()) {
     type = valueType;
     wasOptional = true;
-  }
-
-  // Objective-C object types, including metatypes.
-  if (language == ForeignLanguage::ObjectiveC) {
-    auto representable = getObjCObjectRepresentable(type, dc);
-    if (representable != ForeignRepresentableKind::None)
-      return { representable, nullptr };
   }
 
   // Local function that simply produces a failing result.
@@ -2295,11 +2296,12 @@ getForeignRepresentable(Type type, ForeignLanguage language,
 
   return { result.getKind(), result.getConformance() };
 }
+#endif // ObjC interop removed
 
 std::pair<ForeignRepresentableKind, ProtocolConformance *>
 TypeBase::getForeignRepresentableIn(ForeignLanguage language,
                                     const DeclContext *dc) {
-  return getForeignRepresentable(Type(this), language, dc);
+  return { ForeignRepresentableKind::None, nullptr };
 }
 
 bool TypeBase::isRepresentableIn(ForeignLanguage language,

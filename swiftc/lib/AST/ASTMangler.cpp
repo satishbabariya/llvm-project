@@ -23,10 +23,6 @@
 #include "swiftc/AST/Mangle.h"
 #include "swiftc/Basic/ManglingUtils.h"
 #include "swiftc/Strings.h"
-#include "clang/Basic/CharInfo.h"
-#include "clang/AST/Attr.h"
-#include "clang/AST/Decl.h"
-#include "clang/AST/DeclObjC.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
@@ -902,13 +898,10 @@ void ASTMangler::appendContextOf(const ValueDecl *decl) {
   // mangling.
   //   known-context ::= 'So'
   if (isa<ClassDecl>(decl) && clangDecl) {
-    assert(isa<clang::ObjCInterfaceDecl>(clangDecl) ||
-           isa<clang::TypedefDecl>(clangDecl));
     return appendOperator("So");
   }
-  
+
   if (isa<ProtocolDecl>(decl) && clangDecl) {
-    assert(isa<clang::ObjCProtocolDecl>(clangDecl));
     return appendOperator("So");
   }
 

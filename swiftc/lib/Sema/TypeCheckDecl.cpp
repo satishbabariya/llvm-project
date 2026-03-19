@@ -26,7 +26,6 @@
 #include "swiftc/AST/ASTVisitor.h"
 #include "swiftc/AST/ASTWalker.h"
 #include "swiftc/AST/Expr.h"
-#include "swiftc/AST/ForeignErrorConvention.h"
 #include "swiftc/AST/GenericEnvironment.h"
 #include "swiftc/AST/NameLookup.h"
 #include "swiftc/AST/PrettyStackTrace.h"
@@ -2276,9 +2275,6 @@ static void checkEnumRawValues(TypeChecker &TC, EnumDecl *ED) {
   Type rawTy = ED->getRawType();
 
   if (!rawTy) {
-    // @objc enums must have a raw type.
-    if (ED->isObjC())
-      TC.diagnose(ED->getNameLoc(), diag::objc_enum_no_raw_type);
     return;
   }
 
@@ -2289,18 +2285,7 @@ static void checkEnumRawValues(TypeChecker &TC, EnumDecl *ED) {
 
   AutomaticEnumValueKind valueKind;
 
-  if (ED->isObjC()) {
-    // @objc enums must have a raw type that's an ObjC-representable
-    // integer type.
-    if (!TC.isCIntegerType(ED, rawTy)) {
-      TC.diagnose(ED->getInherited().front().getSourceRange().Start,
-                  diag::objc_enum_raw_type_not_integer,
-                  rawTy);
-      ED->getInherited().front().setInvalidType(TC.Context);
-      return;
-    }
-    valueKind = AutomaticEnumValueKind::Integer;
-  } else {
+  {
     // Swift enums require that the raw type is convertible from one of the
     // primitive literal protocols.
     auto conformsToProtocol = [&](KnownProtocolKind protoKind) {
@@ -3613,9 +3598,7 @@ public:
     if (!IsFirstPass) {
       checkAccessibility(TC, ED);
 
-      if (ED->hasRawType() && !ED->isObjC()) {
-        // ObjC enums have already had their raw values checked, but pure Swift
-        // enums haven't.
+      if (ED->hasRawType()) {
         checkEnumRawValues(TC, ED);
       }
 
@@ -4072,11 +4055,10 @@ public:
     if (decl->isInvalid() || decl->isImplicit() || decl->hasClangNode())
       return false;
 
-    // Functions can have _silgen_name, semantics, and NSManaged attributes.
+    // Functions can have _silgen_name or semantics attributes.
     if (auto func = dyn_cast<AbstractFunctionDecl>(decl)) {
       if (func->getAttrs().hasAttribute<SILGenNameAttr>() ||
-          func->getAttrs().hasAttribute<SemanticsAttr>() ||
-          func->getAttrs().hasAttribute<NSManagedAttr>())
+          func->getAttrs().hasAttribute<SemanticsAttr>())
         return false;
     }
 
@@ -4942,26 +4924,6 @@ public:
         auto parentStorage = dyn_cast<AbstractStorageDecl>(parentDecl);
         assert(parentMethod || parentStorage);
 
-        // If both are Objective-C, then match based on selectors or
-        // subscript kind and check the types separately.
-        bool objCMatch = false;
-        if (parentDecl->isObjC() && decl->isObjC()) {
-          if (method) {
-            if (method->getObjCSelector(&TC)
-                  == parentMethod->getObjCSelector(&TC))
-              objCMatch = true;
-          } else if (auto *parentSubscript =
-                       dyn_cast<SubscriptDecl>(parentStorage)) {
-            // If the subscript kinds don't match, it's not an override.
-            if (subscript->getObjCSubscriptKind(&TC)
-                  == parentSubscript->getObjCSubscriptKind(&TC))
-              objCMatch = true;
-          }
-
-          // Properties don't need anything here since they are always
-          // checked by name.
-        }
-
         // Check whether the types are identical.
         // FIXME: It's wrong to use the uncurried types here for methods.
         auto parentDeclTy = owningTy->adjustSuperclassMemberDeclType(
@@ -5005,36 +4967,11 @@ public:
         if (attempt == OverrideCheckingAttempt::MismatchedOptional ||
             attempt == OverrideCheckingAttempt::BaseNameWithMismatchedOptional){
           matchMode = OverrideMatchMode::AllowTopLevelOptionalMismatch;
-        } else if (parentDecl->isObjC()) {
-          matchMode = OverrideMatchMode::AllowNonOptionalForIUOParam;
         }
 
         if (declTy->canOverride(parentDeclTy, matchMode, &TC)) {
-          // If the Objective-C selectors match, always call it exact.
-          matches.push_back({parentDecl, objCMatch, parentDeclTy});
-          hadExactMatch |= objCMatch;
+          matches.push_back({parentDecl, false, parentDeclTy});
           continue;
-        }
-
-        // Not a match. If we had an Objective-C match, this is a serious
-        // problem.
-        if (objCMatch) {
-          if (method) {
-            TC.diagnose(decl, diag::override_objc_type_mismatch_method,
-                        method->getObjCSelector(&TC), declTy);
-          } else {
-            TC.diagnose(decl, diag::override_objc_type_mismatch_subscript,
-                        static_cast<unsigned>(
-                          subscript->getObjCSubscriptKind(&TC)),
-                        declTy);
-          }
-          TC.diagnose(parentDecl, diag::overridden_here_with_type,
-                      parentDeclTy);
-          
-          // Put an invalid 'override' attribute here.
-          makeInvalidOverrideAttr(TC, decl);
-
-          return true;
         }
       }
       if (!matches.empty())
@@ -5503,7 +5440,7 @@ public:
   ///
   /// \returns true if an error occurred.
   static bool recordOverride(TypeChecker &TC, ValueDecl *override,
-                             ValueDecl *base, bool isKnownObjC = false) {
+                             ValueDecl *base) {
     // Check property and subscript overriding.
     if (auto *baseASD = dyn_cast<AbstractStorageDecl>(base)) {
       auto *overrideASD = cast<AbstractStorageDecl>(override);
@@ -5553,17 +5490,6 @@ public:
       }
     }
     
-    // Non-Objective-C declarations in extensions cannot override or
-    // be overridden.
-    if ((base->getDeclContext()->isExtensionContext() ||
-         override->getDeclContext()->isExtensionContext()) &&
-        !base->isObjC() && !isKnownObjC) {
-      TC.diagnose(override, diag::override_decl_extension,
-                  !override->getDeclContext()->isExtensionContext());
-      TC.diagnose(base, diag::overridden_here);
-      return true;
-    }
-    
     // If the overriding declaration does not have the 'override' modifier on
     // it, complain.
     if (!override->getAttrs().hasAttribute<OverrideAttr>() &&
@@ -5608,12 +5534,6 @@ public:
         TC.diagnose(base, diag::overridden_here);
       }
 
-      if (!overrideFn->hasThrows() && base->isObjC() &&
-          cast<AbstractFunctionDecl>(base)->hasThrows()) {
-        TC.diagnose(override, diag::override_throws_objc,
-                    isa<ConstructorDecl>(override));
-        TC.diagnose(base, diag::overridden_here);
-      }
     }
 
     // FIXME: Possibly should extend to more availability checking.
@@ -5664,8 +5584,7 @@ public:
               new (TC.Context) OverrideAttr(loc));
         }
 
-        recordOverride(TC, overridingAccessor, baseAccessor,
-                       baseASD->isObjC());
+        recordOverride(TC, overridingAccessor, baseAccessor);
       };
 
       recordAccessorOverride(AccessorKind::IsGetter);
@@ -6015,8 +5934,6 @@ public:
       }
     }
 
-    // An initializer is ObjC-compatible if it's explicitly @objc or a member
-    // of an ObjC-compatible class.
     // If this initializer overrides a 'required' initializer, it must itself
     // be marked 'required'.
     if (!CD->getAttrs().hasAttribute<RequiredAttr>()) {
@@ -6442,11 +6359,7 @@ void TypeChecker::validateDecl(ValueDecl *D) {
 
     validateAttributes(*this, D);
 
-    // Mark a class as @objc. This must happen before checking its members.
     if (auto CD = dyn_cast<ClassDecl>(nominal)) {
-      Optional<ObjCReason> isObjC = shouldMarkClassAsObjC(*this, CD);
-      markAsObjC(*this, CD, isObjC);
-
       // Determine whether we require in-class initializers.
       if (CD->getAttrs().hasAttribute<RequiresStoredPropertyInitsAttr>() ||
           (CD->hasSuperclass() &&
@@ -6455,12 +6368,6 @@ void TypeChecker::validateDecl(ValueDecl *D) {
         CD->setRequiresStoredPropertyInits(true);
     }
 
-    if (auto *ED = dyn_cast<EnumDecl>(nominal)) {
-      // @objc enums use their raw values as the value representation, so we
-      // need to force the values to be checked.
-      if (ED->isObjC())
-        checkEnumRawValues(*this, ED);
-    }
 
     ValidatedTypes.insert(nominal);
     break;
@@ -6481,25 +6388,6 @@ void TypeChecker::validateDecl(ValueDecl *D) {
     resolveInheritedProtocols(proto);
 
     validateAttributes(*this, D);
-
-    // If the protocol is @objc, it may only refine other @objc protocols.
-    // FIXME: Revisit this restriction.
-    if (proto->getAttrs().hasAttribute<ObjCAttr>()) {
-      Optional<ObjCReason> isObjC = ObjCReason::ImplicitlyObjC;
-
-      for (auto inherited : proto->getInheritedProtocols(nullptr)) {
-        if (!inherited->isObjC()) {
-          diagnose(proto->getLoc(),
-                   diag::objc_protocol_inherits_non_objc_protocol,
-                   proto->getDeclaredType(), inherited->getDeclaredType());
-          diagnose(inherited->getLoc(), diag::protocol_here,
-                   inherited->getName());
-          isObjC = None;
-        }
-      }
-
-      markAsObjC(*this, proto, isObjC);
-    }
 
     ValidatedTypes.insert(proto);
     break;
@@ -6575,18 +6463,6 @@ void TypeChecker::validateDecl(ValueDecl *D) {
       // Properties need some special validation logic.
       if (auto *nominalDecl = VD->getDeclContext()
               ->getAsNominalTypeOrNominalTypeExtensionContext()) {
-        // If this is a property, check if it needs to be exposed to
-        // Objective-C.
-        Optional<ObjCReason> isObjC = shouldMarkAsObjC(*this, VD);
-
-        if (isObjC && !isRepresentableInObjC(VD, *isObjC))
-          isObjC = None;
-
-        markAsObjC(*this, VD, isObjC);
-
-        // Infer 'dynamic' before touching accessors.
-        inferDynamic(Context, VD);
-
         // If this variable is a class member, mark it final if the
         // class is final, or if it was declared with 'let'.
         if (auto cls = dyn_cast<ClassDecl>(nominalDecl)) {
@@ -7260,17 +7136,9 @@ void TypeChecker::addImplicitConstructors(NominalTypeDecl *decl) {
         for (auto entry : pbd->getPatternList()) {
           if (entry.getInit()) continue;
 
-          // If one of the bound variables is @NSManaged, go ahead no matter
-          // what.
-          bool CheckDefaultInitializer = true;
-          entry.getPattern()->forEachVariable([&](VarDecl *vd) {
-            if (vd->getAttrs().hasAttribute<NSManagedAttr>())
-              CheckDefaultInitializer = false;
-          });
-          
           // If we cannot default initialize the property, we cannot
           // synthesize a default initializer for the class.
-          if (CheckDefaultInitializer && !isDefaultInitializable(pbd))
+          if (!isDefaultInitializable(pbd))
             SuppressDefaultInitializer = true;
         }
       continue;
@@ -7513,176 +7381,16 @@ void TypeChecker::defineDefaultConstructor(NominalTypeDecl *decl) {
 static void validateAttributes(TypeChecker &TC, Decl *D) {
   DeclAttributes &Attrs = D->getAttrs();
 
-  auto checkObjCDeclContext = [](Decl *D) {
-    DeclContext *DC = D->getDeclContext();
-    if (DC->getAsClassOrClassExtensionContext())
-      return true;
-    if (auto *PD = dyn_cast<ProtocolDecl>(DC))
-      if (PD->isObjC())
-        return true;
-    return false;
-  };
-
-  if (auto objcAttr = Attrs.getAttribute<ObjCAttr>()) {
-    // Only certain decls can be ObjC.
-    Optional<Diag<>> error;
-    if (isa<ClassDecl>(D) ||
-        isa<ProtocolDecl>(D)) {
-      /* ok */
-    } else if (auto ED = dyn_cast<EnumDecl>(D)) {
-      if (ED->isGenericContext())
-        error = diag::objc_enum_generic;
-    } else if (auto EED = dyn_cast<EnumElementDecl>(D)) {
-      auto ED = EED->getParentEnum();
-      if (!ED->getAttrs().hasAttribute<ObjCAttr>())
-        error = diag::objc_enum_case_req_objc_enum;
-      else if (objcAttr->hasName() && EED->getParentCase()->getElements().size() > 1)
-        error = diag::objc_enum_case_multi;
-    } else if (auto *func = dyn_cast<FuncDecl>(D)) {
-      if (!checkObjCDeclContext(D))
-        error = diag::invalid_objc_decl_context;
-      else if (func->isAccessor() && !func->isGetterOrSetter())
-        error = diag::objc_observing_accessor;
-    } else if (isa<ConstructorDecl>(D) ||
-               isa<DestructorDecl>(D) ||
-               isa<SubscriptDecl>(D) ||
-               isa<VarDecl>(D)) {
-      if (!checkObjCDeclContext(D))
-        error = diag::invalid_objc_decl_context;
-      /* ok */
-    } else {
-      error = diag::invalid_objc_decl;
-    }
-
-    if (error) {
-      TC.diagnose(D->getStartLoc(), *error)
-        .fixItRemove(objcAttr->getRangeWithAt());
-      objcAttr->setInvalid();
-      return;
-    }
-
-    // If there is a name, check whether the kind of name is
-    // appropriate.
-    if (auto objcName = objcAttr->getName()) {
-      if (isa<ClassDecl>(D) || isa<ProtocolDecl>(D) || isa<VarDecl>(D)
-          || isa<EnumDecl>(D) || isa<EnumElementDecl>(D)) {
-        // Types and properties can only have nullary
-        // names. Complain and recover by chopping off everything
-        // after the first name.
-        if (objcName->getNumArgs() > 0) {
-          int which = isa<ClassDecl>(D)? 0
-                    : isa<ProtocolDecl>(D)? 1
-                    : isa<EnumDecl>(D)? 2
-                    : isa<EnumElementDecl>(D)? 3
-                    : 4;
-          SourceLoc firstNameLoc = objcAttr->getNameLocs().front();
-          SourceLoc afterFirstNameLoc = 
-            Lexer::getLocForEndOfToken(TC.Context.SourceMgr, firstNameLoc);
-          TC.diagnose(firstNameLoc, diag::objc_name_req_nullary, which)
-            .fixItRemoveChars(afterFirstNameLoc, objcAttr->getRParenLoc());
-          const_cast<ObjCAttr *>(objcAttr)->setName(
-            ObjCSelector(TC.Context, 0, objcName->getSelectorPieces()[0]),
-            /*implicit=*/false);
-        }
-      } else if (isa<SubscriptDecl>(D)) {
-        // Subscripts can never have names.
-        TC.diagnose(objcAttr->getLParenLoc(), diag::objc_name_subscript);
-        const_cast<ObjCAttr *>(objcAttr)->clearName();
-      } else {
-        // We have a function. Make sure that the number of parameters
-        // matches the "number of colons" in the name.
-        auto func = cast<AbstractFunctionDecl>(D);
-        auto params = func->getParameterList(1);
-        unsigned numParameters = params->size();
-        if (auto CD = dyn_cast<ConstructorDecl>(func))
-          if (CD->isObjCZeroParameterWithLongSelector())
-            numParameters = 0;  // Something like "init(foo: ())"
-
-        // A throwing method has an error parameter.
-        if (func->hasThrows())
-          ++numParameters;
-
-        unsigned numArgumentNames = objcName->getNumArgs();
-        if (numArgumentNames != numParameters) {
-          TC.diagnose(objcAttr->getNameLocs().front(), 
-                      diag::objc_name_func_mismatch,
-                      isa<FuncDecl>(func), 
-                      numArgumentNames, 
-                      numArgumentNames != 1,
-                      numParameters,
-                      numParameters != 1,
-                      func->hasThrows());
-          D->getAttrs().add(
-            ObjCAttr::createUnnamed(TC.Context,
-                                    objcAttr->AtLoc,
-                                    objcAttr->Range.Start));
-          D->getAttrs().removeAttribute(objcAttr);
-        }
-      }
-    } else if (isa<EnumElementDecl>(D)) {
-      // Enum elements require names.
-      TC.diagnose(objcAttr->getLocation(), diag::objc_enum_case_req_name)
-        .fixItRemove(objcAttr->getRangeWithAt());
-      objcAttr->setInvalid();
-    }
-  }
-
-  if (auto nonObjcAttr = Attrs.getAttribute<NonObjCAttr>()) {
-    // Only methods, properties, subscripts and constructors can be NonObjC.
-    // The last three are handled automatically by generic attribute
-    // validation -- for the first one, we have to check FuncDecls
-    // ourselves.
-    Optional<Diag<>> error;
-
-    auto func = dyn_cast<FuncDecl>(D);
-    if (func &&
-        (isa<DestructorDecl>(func) ||
-         !checkObjCDeclContext(func) ||
-         (func->isAccessor() && !func->isGetterOrSetter()))) {
-      error = diag::invalid_nonobjc_decl;
-    }
-
-    if (error) {
-      TC.diagnose(D->getStartLoc(), *error)
-        .fixItRemove(nonObjcAttr->getRangeWithAt());
-      nonObjcAttr->setInvalid();
-      return;
-    }
-  }
-
   // Only protocol members can be optional.
   if (auto *OA = Attrs.getAttribute<OptionalAttr>()) {
     if (!isa<ProtocolDecl>(D->getDeclContext())) {
       TC.diagnose(OA->getLocation(), diag::optional_attribute_non_protocol)
         .fixItRemove(OA->getRange());
       D->getAttrs().removeAttribute(OA);
-    } else if (!cast<ProtocolDecl>(D->getDeclContext())->isObjC()) {
-      TC.diagnose(OA->getLocation(),
-                  diag::optional_attribute_non_objc_protocol);
-      D->getAttrs().removeAttribute(OA);
     } else if (isa<ConstructorDecl>(D)) {
       TC.diagnose(OA->getLocation(),
                   diag::optional_attribute_initializer);
       D->getAttrs().removeAttribute(OA);
-    } else {
-      auto objcAttr = D->getAttrs().getAttribute<ObjCAttr>();
-      if (!objcAttr || objcAttr->isImplicit()) {
-        auto diag = TC.diagnose(OA->getLocation(),
-                                diag::optional_attribute_missing_explicit_objc);
-        if (auto VD = dyn_cast<ValueDecl>(D))
-          diag.fixItInsert(VD->getAttributeInsertionLoc(false), "@objc ");
-      }
-    }
-  }
-
-  // Only protocols that are @objc can have "unavailable" methods.
-  if (auto AvAttr = Attrs.getUnavailable(TC.Context)) {
-    if (auto PD = dyn_cast<ProtocolDecl>(D->getDeclContext())) {
-      if (!PD->isObjC()) {
-        TC.diagnose(AvAttr->getLocation(),
-                    diag::unavailable_method_non_objc_protocol);
-        D->getAttrs().removeAttribute(AvAttr);
-      }
     }
   }
 }

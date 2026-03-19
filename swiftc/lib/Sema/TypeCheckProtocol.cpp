@@ -702,47 +702,6 @@ static bool checkMutating(FuncDecl *requirement, FuncDecl *witness,
   return !requirementMutating && witnessMutating;
 }
 
-/// Check that the Objective-C method(s) provided by the witness have
-/// the same selectors as those required by the requirement.
-static bool checkObjCWitnessSelector(TypeChecker &tc, ValueDecl *req,
-                                     ValueDecl *witness) {
-  // Simple case: for methods and initializers, check that the selectors match.
-  if (auto reqFunc = dyn_cast<AbstractFunctionDecl>(req)) {
-    auto witnessFunc = cast<AbstractFunctionDecl>(witness);
-    if (reqFunc->getObjCSelector() == witnessFunc->getObjCSelector())
-      return false;
-
-    auto diagInfo = getObjCMethodDiagInfo(witnessFunc);
-    auto diag = tc.diagnose(witness, diag::objc_witness_selector_mismatch,
-                            diagInfo.first, diagInfo.second,
-                            witnessFunc->getObjCSelector(),
-                            reqFunc->getObjCSelector());
-    fixDeclarationObjCName(diag, witnessFunc, reqFunc->getObjCSelector());
-
-    return true;
-  }
-
-  // Otherwise, we have an abstract storage declaration.
-  auto reqStorage = cast<AbstractStorageDecl>(req);
-  auto witnessStorage = cast<AbstractStorageDecl>(witness);
-
-  // FIXME: Check property names!
-
-  // Check the getter.
-  if (auto reqGetter = reqStorage->getGetter()) {
-    if (checkObjCWitnessSelector(tc, reqGetter, witnessStorage->getGetter()))
-      return true;
-  }
-
-  // Check the setter.
-  if (auto reqSetter = reqStorage->getSetter()) {
-    if (checkObjCWitnessSelector(tc, reqSetter, witnessStorage->getSetter()))
-      return true;
-  }
-
-  return false;
-}
-
 /// \brief Match the given witness to the given requirement.
 ///
 /// \returns the result of performing the match.
@@ -858,12 +817,6 @@ matchWitness(TypeChecker &tc,
     decomposeFunctionType = true;
     ignoreReturnType = true;
   }
-
-  // If the requirement is @objc, the witness must not be marked with @nonobjc.
-  // @objc-ness will be inferred (separately) and the selector will be checked
-  // later.
-  if (req->isObjC() && witness->getAttrs().hasAttribute<NonObjCAttr>())
-    return RequirementMatch(witness, MatchKind::NonObjC);
 
   // Set up the match, determining the requirement and witness types
   // in the process.
@@ -5156,47 +5109,6 @@ bool TypeChecker::useObjectiveCBridgeableConformancesOfArgs(
   return anyUnsatisfied;
 }
 
-void TypeChecker::useBridgedNSErrorConformances(DeclContext *dc, Type type) {
-  auto bridgedStoredNSError = Context.getProtocol(
-                                    KnownProtocolKind::BridgedStoredNSError);
-  auto errorCodeProto = Context.getProtocol(
-                              KnownProtocolKind::ErrorCodeProtocol);
-  auto rawProto = Context.getProtocol(
-                        KnownProtocolKind::RawRepresentable);
-
-  if (!bridgedStoredNSError || !errorCodeProto || !rawProto)
-    return;
-
-  // _BridgedStoredNSError.
-  auto conformance = conformsToProtocol(type, bridgedStoredNSError, dc,
-                                        ConformanceCheckFlags::Used);
-  if (conformance && conformance->isConcrete()) {
-    // Hack: If we've used a conformance to the _BridgedStoredNSError
-    // protocol, also use the RawRepresentable and _ErrorCodeProtocol
-    // conformances on the Code associated type witness.
-    if (auto codeType = ProtocolConformance::getTypeWitnessByName(
-                          type, *conformance, Context.Id_Code, this)) {
-      (void)conformsToProtocol(codeType, errorCodeProto, dc,
-                               ConformanceCheckFlags::Used);
-      (void)conformsToProtocol(codeType, rawProto, dc,
-                               ConformanceCheckFlags::Used);
-    }
-  }
-
-  // _ErrorCodeProtocol.
-  conformance =
-  conformsToProtocol(type, errorCodeProto, dc,
-                     (ConformanceCheckFlags::SuppressDependencyTracking|
-                      ConformanceCheckFlags::Used));
-  if (conformance && conformance->isConcrete()) {
-    if (Type errorType = ProtocolConformance::getTypeWitnessByName(
-          type, *conformance, Context.Id_ErrorType, this)) {
-      (void)conformsToProtocol(errorType, bridgedStoredNSError, dc,
-                               ConformanceCheckFlags::Used);
-    }
-  }
-}
-
 void TypeChecker::checkConformance(NormalProtocolConformance *conformance) {
   checkConformsToProtocol(*this, conformance);
 }
@@ -5366,33 +5278,6 @@ canSuppressPotentialWitnessWarningWithMovement(ValueDecl *requirement,
   return PotentialWitnessWarningSuppression::MoveToExtension;
 }
 
-/// Determine we can suppress the warning about a potential witness nearly
-/// matching an optional requirement by adding @nonobjc.
-static bool
-canSuppressPotentialWitnessWarningWithNonObjC(ValueDecl *requirement,
-                                              ValueDecl *witness) {
-  // The requirement must be @objc.
-  if (!requirement->isObjC()) return false;
-
-  // The witness must not have @nonobjc.
-  if (witness->getAttrs().hasAttribute<NonObjCAttr>()) return false;
-
-  // The witness must be @objc.
-  if (!witness->isObjC()) return false;
-
-  // ... but not explicitly.
-  if (auto attr = witness->getAttrs().getAttribute<ObjCAttr>()) {
-    if (!attr->isImplicit()) return false;
-  }
-
-  // And not because it has to be for overriding.
-  if (auto overridden = witness->getOverriddenDecl())
-    if (overridden->isObjC()) return false;
-
-  // @nonobjc can be used to silence this warning.
-  return true;
-}
-
 /// Get the length of the given full name, counting up the base name and all
 /// argument labels.
 static unsigned getNameLength(DeclName name) {
@@ -5412,12 +5297,7 @@ static bool shouldWarnAboutPotentialWitness(ValueDecl *req,
                                             Accessibility accessibility,
                                             unsigned score) {
   // If the warning couldn't be suppressed, don't warn.
-  if (!canSuppressPotentialWitnessWarningWithMovement(req, witness) &&
-      !canSuppressPotentialWitnessWarningWithNonObjC(req, witness))
-    return false;
-
-  // If the potential witness is already marked @nonobjc, don't warn.
-  if (witness->getAttrs().hasAttribute<NonObjCAttr>())
+  if (!canSuppressPotentialWitnessWarningWithMovement(req, witness))
     return false;
 
   // Don't warn if the potential witness has been explicitly given less
@@ -5459,17 +5339,8 @@ static void diagnosePotentialWitness(TypeChecker &tc,
   RequirementEnvironment reqEnvironment(tc, dc, req, conformance);
   auto match = matchWitness(tc, conformance->getProtocol(), conformance,
                             dc, req, witness, reqEnvironment);
-  if (match.Kind == MatchKind::ExactMatch &&
-      req->isObjC() && !witness->isObjC()) {
-    // Special case: note to add @objc.
-    auto diag = tc.diagnose(witness,
-                            diag::optional_req_nonobjc_near_match_add_objc);
-    if (!witness->canInferObjCFromRequirement(req))
-      fixDeclarationObjCName(diag, witness, req->getObjCRuntimeName());
-  } else {
-    diagnoseMatch(conformance->getDeclContext()->getParentModule(),
-                  conformance, req, match);
-  }
+  diagnoseMatch(conformance->getDeclContext()->getParentModule(),
+                conformance, req, match);
 
   // If moving the declaration can help, suggest that.
   if (auto move
@@ -5485,12 +5356,6 @@ static void diagnosePotentialWitness(TypeChecker &tc,
                 witness->getFullName(),
                 accessibility)
       .fixItInsert(witness->getAttributeInsertionLoc(true), "private ");
-  }
-
-  // If adding @nonobjc can help, suggest that.
-  if (canSuppressPotentialWitnessWarningWithNonObjC(req, witness)) {
-    tc.diagnose(witness, diag::optional_req_near_match_nonobjc, false)
-      .fixItInsert(witness->getAttributeInsertionLoc(false), "@nonobjc ");
   }
 
   tc.diagnose(req, diag::protocol_requirement_here, req->getFullName());
@@ -5699,172 +5564,7 @@ void TypeChecker::checkConformancesInContext(DeclContext *dc,
       }
     }
 
-    // For any unsatisfied optional @objc requirements that remain
-    // unsatisfied, note them in the AST for @objc selector collision
-    // checking.
-    for (auto req : unsatisfiedReqs) {
-      // Skip non-@objc requirements.
-      if (!req->isObjC()) continue;
-
-      // Skip unavailable requirements.
-      if (req->getAttrs().isUnavailable(Context)) continue;
-
-      // Record this requirement.
-      if (auto funcReq = dyn_cast<AbstractFunctionDecl>(req)) {
-        Context.recordObjCUnsatisfiedOptReq(dc, funcReq);
-      } else {
-        auto storageReq = cast<AbstractStorageDecl>(req);
-        if (auto getter = storageReq->getGetter())
-          Context.recordObjCUnsatisfiedOptReq(dc, getter);
-        if (auto setter = storageReq->getSetter())
-          Context.recordObjCUnsatisfiedOptReq(dc, setter);
-      }
-    }
   }
-}
-
-llvm::TinyPtrVector<ValueDecl *>
-TypeChecker::findWitnessedObjCRequirements(const ValueDecl *witness,
-                                           bool anySingleRequirement) {
-  llvm::TinyPtrVector<ValueDecl *> result;
-
-  // Types don't infer @objc this way.
-  if (isa<TypeDecl>(witness)) return result;
-
-  auto dc = witness->getDeclContext();
-  auto nominal = dc->getAsNominalTypeOrNominalTypeExtensionContext();
-  if (!nominal) return result;
-
-  DeclName name = witness->getFullName();
-  auto accessorKind = AccessorKind::NotAccessor;
-  if (auto *fn = dyn_cast<FuncDecl>(witness)) {
-    accessorKind = fn->getAccessorKind();
-    switch (accessorKind) {
-    case AccessorKind::IsAddressor:
-    case AccessorKind::IsMutableAddressor:
-    case AccessorKind::IsMaterializeForSet:
-      // These accessors are never exposed to Objective-C.
-      return result;
-    case AccessorKind::IsDidSet:
-    case AccessorKind::IsWillSet:
-      // These accessors are folded into the setter.
-      return result;
-    case AccessorKind::IsGetter:
-    case AccessorKind::IsSetter:
-      // These are found relative to the main decl.
-      name = fn->getAccessorStorageDecl()->getFullName();
-      break;
-    case AccessorKind::NotAccessor:
-      // Do nothing.
-      break;
-    }
-  }
-
-  for (auto proto : nominal->getAllProtocols()) {
-    // We only care about Objective-C protocols.
-    if (!proto->isObjC()) continue;
-
-    Optional<ProtocolConformance *> conformance;
-    for (auto req : proto->lookupDirect(name, true)) {
-      // Skip anything in a protocol extension.
-      if (req->getDeclContext() != proto) continue;
-
-      // Skip types.
-      if (isa<TypeDecl>(req)) continue;
-
-      // Skip unavailable requirements.
-      if (req->getAttrs().isUnavailable(Context)) continue;
-
-      // Dig out the conformance.
-      if (!conformance.hasValue()) {
-        SmallVector<ProtocolConformance *, 2> conformances;
-        nominal->lookupConformance(dc->getParentModule(), proto,
-                                   conformances);
-        if (conformances.size() == 1)
-          conformance = conformances.front();
-        else
-          conformance = nullptr;
-      }
-      if (!*conformance) continue;
-
-      const Decl *found = (*conformance)->getWitness(req, this).getDecl();
-
-      if (!found) {
-        // If we have an optional requirement in an inherited conformance,
-        // check whether the potential witness matches the requirement.
-        // FIXME: for now, don't even try this with generics involved. We
-        // should be tracking how subclasses implement optional requirements,
-        // in which case the getWitness() check above would suffice.
-        if (!req->getAttrs().hasAttribute<OptionalAttr>() ||
-            !isa<InheritedProtocolConformance>(*conformance)) {
-          continue;
-        }
-
-        auto normal = (*conformance)->getRootNormalConformance();
-        auto dc = (*conformance)->getDeclContext();
-        if (dc->getGenericSignatureOfContext() ||
-            normal->getDeclContext()->getGenericSignatureOfContext()) {
-          continue;
-        }
-
-        const ValueDecl *witnessToMatch = witness;
-        if (accessorKind != AccessorKind::NotAccessor)
-          witnessToMatch = cast<FuncDecl>(witness)->getAccessorStorageDecl();
-
-        RequirementEnvironment reqEnvironment(*this, dc, req, *conformance);
-        if (matchWitness(*this, proto, *conformance,
-                         witnessToMatch->getDeclContext(), req,
-                         const_cast<ValueDecl *>(witnessToMatch),
-                         reqEnvironment).Kind == MatchKind::ExactMatch) {
-          if (accessorKind != AccessorKind::NotAccessor) {
-            auto *storageReq = dyn_cast<AbstractStorageDecl>(req);
-            if (!storageReq)
-              continue;
-            req = storageReq->getAccessorFunction(accessorKind);
-          }
-          result.push_back(req);
-          if (anySingleRequirement) return result;
-          continue;
-        }
-
-        continue;
-      }
-
-      // Dig out the appropriate accessor, if necessary.
-      if (accessorKind != AccessorKind::NotAccessor) {
-        auto *storageReq = dyn_cast<AbstractStorageDecl>(req);
-        auto *storageFound = dyn_cast_or_null<AbstractStorageDecl>(found);
-        if (!storageReq || !storageFound)
-          continue;
-        req = storageReq->getAccessorFunction(accessorKind);
-        if (!req)
-          continue;
-        found = storageFound->getAccessorFunction(accessorKind);
-      }
-
-      // Determine whether the witness for this conformance is in fact
-      // our witness.
-      if (found == witness) {
-        result.push_back(req);
-        if (anySingleRequirement) return result;
-        continue;
-      }
-    }
-  }
-
-  // Sort the results.
-  if (result.size() > 2) {
-    std::stable_sort(result.begin(), result.end(),
-                     [&](ValueDecl *lhs, ValueDecl *rhs) {
-                       ProtocolDecl *lhsProto
-                         = cast<ProtocolDecl>(lhs->getDeclContext());
-                       ProtocolDecl *rhsProto
-                         = cast<ProtocolDecl>(rhs->getDeclContext());
-                       return ProtocolType::compareProtocols(&lhsProto,
-                                                             &rhsProto) < 0;
-                     });
-  }
-  return result;
 }
 
 void TypeChecker::resolveTypeWitness(
@@ -5922,9 +5622,6 @@ ValueDecl *TypeChecker::deriveProtocolRequirement(DeclContext *DC,
   case KnownProtocolKind::Hashable:
     return DerivedConformance::deriveHashable(*this, Decl, TypeDecl, Requirement);
     
-  case KnownProtocolKind::BridgedNSError:
-    return DerivedConformance::deriveBridgedNSError(*this, Decl, TypeDecl,
-                                                    Requirement);
 
   default:
     return nullptr;

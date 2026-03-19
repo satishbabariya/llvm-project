@@ -1867,10 +1867,6 @@ bool NominalTypeDecl::hasFixedLayout() const {
   if (hasClangNode())
     return true;
 
-  // @objc enums and protocols always have a fixed layout.
-  if ((isa<EnumDecl>(this) || isa<ProtocolDecl>(this)) && isObjC())
-    return true;
-
   // Otherwise, access via indirect "resilient" interfaces.
   switch (getParentModule()->getResilienceStrategy()) {
   case ResilienceStrategy::Resilient:
@@ -1914,10 +1910,6 @@ bool NominalTypeDecl::derivesProtocolConformance(ProtocolDecl *protocol) const {
     case KnownProtocolKind::Hashable:
       return enumDecl->hasOnlyCasesWithoutAssociatedValues();
     
-    // @objc enums can explicitly derive their _BridgedNSError conformance.
-    case KnownProtocolKind::BridgedNSError:
-      return isObjC() && enumDecl->hasOnlyCasesWithoutAssociatedValues();
-
     default:
       return false;
     }
@@ -2548,11 +2540,6 @@ bool ProtocolDecl::requiresClassSlow() {
   // Ensure that the result cannot change in future.
   assert(isInheritedProtocolsValid());
 
-  if (getAttrs().hasAttribute<ObjCAttr>() || isObjC()) {
-    ProtocolDeclBits.RequiresClass = true;
-    return true;
-  }
-
   // Check inherited protocols for class-ness.
   for (auto *proto : getInheritedProtocols(nullptr)) {
     if (proto->requiresClass()) {
@@ -2573,10 +2560,9 @@ bool ProtocolDecl::existentialConformsToSelfSlow() {
   if (isSpecificProtocol(KnownProtocolKind::AnyObject))
     return true;
 
-  if (!isObjC()) {
-    ProtocolDeclBits.ExistentialConformsToSelf = false;
-    return false;
-  }
+  // ObjC interop removed - existential never conforms to self.
+  ProtocolDeclBits.ExistentialConformsToSelf = false;
+  return false;
 
   // Check whether this protocol conforms to itself.
   for (auto member : getMembers()) {
@@ -3013,7 +2999,7 @@ void AbstractStorageDecl::setComputedSetter(FuncDecl *Set) {
   assert(getStorageKind() == Computed && "Not a computed variable");
   assert(getGetter() && "sanity check: missing getter");
   assert(!getSetter() && "already has a setter");
-  assert(hasClangNode() && "should only be used for ObjC properties");
+  assert(hasClangNode() && "should only be used for imported properties");
   assert(Set && "should not be called for readonly properties");
   GetSetInfo.getPointer()->Set = Set;
   Set->makeAccessor(this, AccessorKind::IsSetter);
@@ -4230,16 +4216,7 @@ void ConstructorDecl::setParameterLists(ParamDecl *selfDecl,
 }
 
 bool ConstructorDecl::isObjCZeroParameterWithLongSelector() const {
-  // The initializer must have a single, non-empty argument name.
-  if (getFullName().getArgumentNames().size() != 1 ||
-      getFullName().getArgumentNames()[0].empty())
-    return false;
-
-  auto *params = getParameterList(1);
-  if (params->size() != 1)
-    return false;
-
-  return params->get(0)->getInterfaceType()->isVoid();
+  return false;
 }
 
 DestructorDecl::DestructorDecl(Identifier NameHack, SourceLoc DestructorLoc,
@@ -4624,11 +4601,6 @@ bool FuncDecl::isDeferBody() const {
 Type TypeBase::getSwiftNewtypeUnderlyingType() {
   auto structDecl = getStructOrBoundGenericStruct();
   if (!structDecl)
-    return {};
-
-  // Make sure the clang node has swift_newtype attribute
-  auto clangNode = structDecl->getClangDecl();
-  if (!clangNode || !clangNode->hasAttr<clang::SwiftNewtypeAttr>())
     return {};
 
   // Underlying type is the type of rawValue

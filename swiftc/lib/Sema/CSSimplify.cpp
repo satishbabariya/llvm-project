@@ -17,7 +17,6 @@
 
 #include "ConstraintSystem.h"
 #include "swiftc/Basic/StringExtras.h"
-#include "swiftc/ClangImporter/ClangModule.h"
 
 using namespace swift;
 using namespace constraints;
@@ -1576,32 +1575,6 @@ ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
         conversionsOrFixes.push_back(ConversionRestrictionKind::DeepEquality);
       }
 
-      // Check for CF <-> ObjectiveC bridging.
-      if (desugar1->getKind() == TypeKind::Class &&
-          kind >= ConstraintKind::Subtype) {
-        auto class1 = cast<ClassDecl>(nominal1->getDecl());
-        auto class2 = cast<ClassDecl>(nominal2->getDecl());
-
-        // CF -> Objective-C via toll-free bridging.
-        assert(!type2->is<LValueType>() && "Unexpected lvalue type!");
-        if (!type1->is<LValueType>() &&
-            class1->getForeignClassKind() == ClassDecl::ForeignKind::CFType &&
-            class2->getForeignClassKind() != ClassDecl::ForeignKind::CFType &&
-            class1->getAttrs().hasAttribute<ObjCBridgedAttr>()) {
-          conversionsOrFixes.push_back(
-            ConversionRestrictionKind::CFTollFreeBridgeToObjC);
-        }
-
-        // Objective-C -> CF via toll-free bridging.
-        assert(!type2->is<LValueType>() && "Unexpected lvalue type!");
-        if (!type1->is<LValueType>() &&
-            class2->getForeignClassKind() == ClassDecl::ForeignKind::CFType &&
-            class1->getForeignClassKind() != ClassDecl::ForeignKind::CFType &&
-            class2->getAttrs().hasAttribute<ObjCBridgedAttr>()) {
-          conversionsOrFixes.push_back(
-            ConversionRestrictionKind::ObjCTollFreeBridgeToCF);
-        }
-      }
 
       break;
     }
@@ -1759,59 +1732,6 @@ ConstraintSystem::matchTypes(Type type1, Type type2, ConstraintKind kind,
       }
     }
 
-    // Metatype to object conversion.
-    //
-    // Class and protocol metatypes are interoperable with certain Objective-C
-    // runtime classes, but only when ObjC interop is enabled.
-    
-    if (TC.getLangOpts().EnableObjCInterop) {
-      // These conversions are between concrete types that don't need further
-      // resolution, so we can consider them immediately solved.
-      auto addSolvedRestrictedConstraint
-        = [&](ConversionRestrictionKind restriction) -> SolutionKind {
-          addRestrictedConstraint(ConstraintKind::Subtype, restriction,
-                                  type1, type2, locator);
-          return SolutionKind::Solved;
-        };
-      
-      if (auto meta1 = type1->getAs<MetatypeType>()) {
-        if (meta1->getInstanceType()->mayHaveSuperclass()
-            && type2->isAnyObject()) {
-          increaseScore(ScoreKind::SK_UserConversion);
-          return addSolvedRestrictedConstraint(
-                           ConversionRestrictionKind::ClassMetatypeToAnyObject);
-        }
-        // Single @objc protocol value metatypes can be converted to the ObjC
-        // Protocol class type.
-        auto isProtocolClassType = [&](Type t) -> bool {
-          if (auto classDecl = t->getClassOrBoundGenericClass())
-            if (classDecl->getName() == getASTContext().Id_Protocol
-                && classDecl->getModuleContext()->getName()
-                    == getASTContext().Id_ObjectiveC)
-              return true;
-          return false;
-        };
-        
-        if (auto protoTy = meta1->getInstanceType()->getAs<ProtocolType>()) {
-          if (protoTy->getDecl()->isObjC()
-              && isProtocolClassType(type2)) {
-            increaseScore(ScoreKind::SK_UserConversion);
-            return addSolvedRestrictedConstraint(
-                    ConversionRestrictionKind::ProtocolMetatypeToProtocolClass);
-          }
-        }
-      }
-      if (auto meta1 = type1->getAs<ExistentialMetatypeType>()) {
-        // Class-constrained existential metatypes can be converted to AnyObject.
-        if (meta1->getInstanceType()->isClassExistentialType()
-            && type2->isAnyObject()) {
-          increaseScore(ScoreKind::SK_UserConversion);
-          return addSolvedRestrictedConstraint(
-                     ConversionRestrictionKind::ExistentialMetatypeToAnyObject);
-        }
-      }
-    }
-    
     // Special implicit nominal conversions.
     if (!type1->is<LValueType>() &&
         kind >= ConstraintKind::Conversion) {
@@ -2127,27 +2047,6 @@ commit_to_conversions:
     if (objectType1->isAnyObject() &&
         type2->getClassOrBoundGenericClass()) {
       conversionsOrFixes.push_back(Fix::getForcedDowncast(*this, type2));
-    }
-
-    // Look through IUO's.
-    auto type1WithoutIUO = objectType1;
-    if (auto elt = type1WithoutIUO->getImplicitlyUnwrappedOptionalObjectType())
-      type1WithoutIUO = elt;
-
-    // If we could perform a bridging cast, try it.
-    if (auto bridged =
-          TC.getDynamicBridgedThroughObjCClass(DC, type1WithoutIUO, type2)) {
-      // Note: don't perform this recovery for NSNumber;
-      bool useFix = true;
-      if (auto classType = bridged->getAs<ClassType>()) {
-        SmallString<16> scratch;
-        if (classType->getDecl()->isObjC() &&
-            classType->getDecl()->getObjCRuntimeName(scratch) == "NSNumber")
-          useFix = false;
-      }
-
-      if (useFix)
-        conversionsOrFixes.push_back(Fix::getForcedDowncast(*this, type2));
     }
 
     // If we're converting an lvalue to an inout type, add the missing '&'.
@@ -2914,21 +2813,11 @@ performMemberLookup(ConstraintKind constraintKind, DeclName memberName,
   // we're performing dynamic lookup into an existential type.
   bool isDynamicLookup = instanceTy->isAnyObject();
 
-  // If the instance type is String bridged to NSString, compute
-  // the type we'll look in for bridging.
-  Type bridgedClass;
-  Type bridgedType;
-  if (instanceTy->getAnyNominal() == TC.Context.getStringDecl()) {
-    if (Type classType = TC.Context.getBridgedToObjC(DC, instanceTy)) {
-      bridgedClass = classType;
-      bridgedType = isMetatype ? MetatypeType::get(classType) : classType;
-    }
-  }
   bool labelMismatch = false;
 
   // Local function that adds the given declaration if it is a
   // reasonable choice.
-  auto addChoice = [&](ValueDecl *cand, bool isBridged,
+  auto addChoice = [&](ValueDecl *cand, bool isBridged /*unused*/,
                        bool isUnwrappedOptional) {
     // Destructors cannot be referenced manually
     if (isa<DestructorDecl>(cand)) {
@@ -3032,13 +2921,6 @@ performMemberLookup(ConstraintKind constraintKind, DeclName memberName,
       return;
     }
 
-    // If we have a bridged type, we found this declaration via bridging.
-    if (isBridged) {
-      result.addViable(OverloadChoice::getDeclViaBridge(bridgedType, cand,
-                                                        functionRefKind));
-      return;
-    }
-
     // If we got the choice by unwrapping an optional type, unwrap the base
     // type.
     Type ovlBaseTy = baseTy;
@@ -3061,31 +2943,6 @@ retry_after_fail:
   labelMismatch = false;
   for (auto result : lookup)
     addChoice(result, /*isBridged=*/false, /*isUnwrappedOptional=*/false);
-
-  // If the instance type is a bridged to an Objective-C type, perform
-  // a lookup into that Objective-C type.
-  if (bridgedType) {
-    LookupResult &bridgedLookup = lookupMember(bridgedClass, memberName);
-    ModuleDecl *foundationModule = nullptr;
-    for (auto result : bridgedLookup) {
-      // Ignore results from the Objective-C "Foundation"
-      // module. Those core APIs are explicitly provided by the
-      // Foundation module overlay.
-      auto module = result->getModuleContext();
-      if (foundationModule) {
-        if (module == foundationModule)
-          continue;
-      } else if (ClangModuleUnit::hasClangModule(module) &&
-                 module->getName().str() == "Foundation") {
-        // Cache the foundation module name so we don't need to look
-        // for it again.
-        foundationModule = module;
-        continue;
-      }
-      
-      addChoice(result, /*isBridged=*/true, /*isUnwrappedOptional=*/false);
-    }
-  }
 
   // If we're looking into a metatype for an unresolved member lookup, look
   // through optional types.
@@ -3327,228 +3184,6 @@ ConstraintSystem::simplifyBridgingConstraint(Type type1,
                                              Type type2,
                                              TypeMatchOptions flags,
                                              ConstraintLocatorBuilder locator) {
-  // There's no bridging without ObjC interop.
-  if (!TC.Context.LangOpts.EnableObjCInterop)
-    return SolutionKind::Error;
-  
-  TypeMatchOptions subflags = getDefaultDecompositionOptions(flags);
-
-  /// Form an unresolved result.
-  auto formUnsolved = [&] {
-    if (flags.contains(TMF_GenerateConstraints)) {
-      addUnsolvedConstraint(
-        Constraint::create(*this, ConstraintKind::BridgingConversion, type1,
-                           type2, getConstraintLocator(locator)));
-      return SolutionKind::Solved;
-    }
-    
-    return SolutionKind::Unsolved;
-  };
-
-  // Local function to look through optional types. It produces the
-  // fully-unwrapped type and a count of the total # of optional types that were
-  // unwrapped.
-  auto unwrapType = [&](Type type) -> std::pair<Type, unsigned> {
-    unsigned count = 0;
-    while (Type objectType = type->getAnyOptionalObjectType()) {
-      ++count;
-
-      TypeMatchOptions unusedOptions;
-      type = getFixedTypeRecursive(objectType, unusedOptions, /*wantRValue=*/true);
-    }
-
-    return { type, count };
-  };
-
-  type1 = getFixedTypeRecursive(type1, flags, /*wantRValue=*/true);
-  type2 = getFixedTypeRecursive(type2, flags, /*wantRValue=*/true);
-
-  if (type1->isTypeVariableOrMember() || type2->isTypeVariableOrMember())
-    return formUnsolved();
-
-  Type unwrappedFromType;
-  unsigned numFromOptionals;
-  std::tie(unwrappedFromType, numFromOptionals) = unwrapType(type1);
-
-  Type unwrappedToType;
-  unsigned numToOptionals;
-  std::tie(unwrappedToType, numToOptionals) = unwrapType(type2);
-
-  if (unwrappedFromType->isTypeVariableOrMember() ||
-      unwrappedToType->isTypeVariableOrMember())
-    return formUnsolved();
-
-  // Update the score.
-  increaseScore(SK_UserConversion); // FIXME: Use separate score kind?
-  if (worseThanBestSolution()) {
-    return SolutionKind::Error;
-  }
-
-  // Local function to count the optional injections that will be performed
-  // after the bridging conversion.
-  auto countOptionalInjections = [&] {
-    if (numToOptionals > numFromOptionals)
-      increaseScore(SK_ValueToOptional, numToOptionals - numFromOptionals);
-  };
-
-  // Anything can be explicitly converted to AnyObject using the universal
-  // bridging conversion. This allows both extraneous optionals in the source
-  // (because optionals themselves can be boxed for AnyObject) and in the
-  // destination (we'll perform the extra injections at the end).
-  if (unwrappedToType->isAnyObject()) {
-    countOptionalInjections();
-    return SolutionKind::Solved;
-  }
-
-  // Unwrap one extra level of implicitly-unwrapped optional on the source,
-  // if needed.
-  if (numFromOptionals == numToOptionals + 1 &&
-      !type1->getImplicitlyUnwrappedOptionalObjectType().isNull()) {
-    --numFromOptionals;
-    increaseScore(SK_ForceUnchecked);
-    if (worseThanBestSolution()) {
-      return SolutionKind::Error;
-    }
-  }
-
-  // The source cannot be more optional than the destination, because bridging
-  // conversions don't allow us to implicitly check for a value in the optional.
-  if (numFromOptionals > numToOptionals) {
-    return SolutionKind::Error;
-  }
-
-  // Explicit bridging from a value type to an Objective-C class type.
-  if (unwrappedFromType->isPotentiallyBridgedValueType() &&
-      unwrappedFromType->getAnyNominal()
-        != TC.Context.getImplicitlyUnwrappedOptionalDecl() &&
-      !flags.contains(TMF_ApplyingOperatorParameter) &&
-      (unwrappedToType->isBridgeableObjectType() ||
-       (unwrappedToType->isExistentialType() &&
-        !unwrappedToType->isAny()))) {
-    countOptionalInjections();
-    if (Type classType = TC.Context.getBridgedToObjC(DC, unwrappedFromType)) {
-      return matchTypes(classType, unwrappedToType, ConstraintKind::Conversion,
-                        subflags, locator);
-    }
-  }
-
-  // Bridging from an Objective-C class type to a value type.
-  // Note that specifically require a class or class-constrained archetype
-  // here, because archetypes cannot be bridged.
-  if (unwrappedFromType->mayHaveSuperclass() &&
-      unwrappedToType->isPotentiallyBridgedValueType() &&
-      unwrappedToType->getAnyNominal()
-        != TC.Context.getImplicitlyUnwrappedOptionalDecl()) {
-    Type bridgedValueType;
-    if (auto objcClass = TC.Context.getBridgedToObjC(DC, unwrappedToType,
-                                                     &bridgedValueType)) {
-      // Bridging NSNumber to NSValue is one-way, since there are multiple Swift
-      // value types that bridge to those object types. It requires a checked
-      // cast to get back.
-      // We accepted these coercions in Swift 3 mode, so we have to live with
-      // them (but give a warning) in that language mode.
-      if (!TC.Context.LangOpts.isSwiftVersion3()
-          && TC.isObjCClassWithMultipleSwiftBridgedTypes(objcClass, DC))
-        return SolutionKind::Error;
-
-      // If the bridged value type is generic, the generic arguments
-      // must either match or be bridged.
-      // FIXME: This should be an associated type of the protocol.
-      if (auto fromBGT = unwrappedToType->getAs<BoundGenericType>()) {
-        if (fromBGT->getDecl() == TC.Context.getArrayDecl()) {
-          // [AnyObject]
-          addConstraint(ConstraintKind::Bind, fromBGT->getGenericArgs()[0],
-                        TC.Context.getProtocol(KnownProtocolKind::AnyObject)
-                          ->getDeclaredType(),
-                        getConstraintLocator(
-                          locator.withPathElement(
-                                       LocatorPathElt::getGenericArgument(0))));
-        } else if (fromBGT->getDecl() == TC.Context.getDictionaryDecl()) {
-          // [NSObject : AnyObject]
-          auto NSObjectType = TC.getNSObjectType(DC);
-          if (!NSObjectType) {
-            // Not a bridging case. Should we detect this earlier?
-            return SolutionKind::Error;
-          }
-
-          addConstraint(ConstraintKind::Bind, fromBGT->getGenericArgs()[0],
-                        NSObjectType,
-                        getConstraintLocator(
-                          locator.withPathElement(
-                            LocatorPathElt::getGenericArgument(0))));
-
-          addConstraint(ConstraintKind::Bind, fromBGT->getGenericArgs()[1],
-                        TC.Context.getProtocol(KnownProtocolKind::AnyObject)
-                          ->getDeclaredType(),
-                        getConstraintLocator(
-                          locator.withPathElement(
-                            LocatorPathElt::getGenericArgument(1))));
-        } else if (fromBGT->getDecl() == TC.Context.getSetDecl()) {
-          auto NSObjectType = TC.getNSObjectType(DC);
-          if (!NSObjectType) {
-            // Not a bridging case. Should we detect this earlier?
-            return SolutionKind::Error;
-          }
-          addConstraint(ConstraintKind::Bind, fromBGT->getGenericArgs()[0],
-                        NSObjectType,
-                        getConstraintLocator(
-                          locator.withPathElement(
-                            LocatorPathElt::getGenericArgument(0))));
-        } else {
-          // Nothing special to do; matchTypes will match generic arguments.
-        }
-      }
-
-      // Make sure we have the bridged value type.
-      if (matchTypes(unwrappedToType, bridgedValueType, ConstraintKind::Equal,
-                     subflags, locator)
-            == ConstraintSystem::SolutionKind::Error)
-        return SolutionKind::Error;
-
-      countOptionalInjections();
-      return matchTypes(unwrappedFromType, objcClass, ConstraintKind::Subtype,
-                        subflags, locator);
-    }
-  }
-
-  // Bridging the elements of an array.
-  if (auto fromElement = isArrayType(unwrappedFromType)) {
-    if (auto toElement = isArrayType(unwrappedToType)) {
-      countOptionalInjections();
-      return simplifyBridgingConstraint(
-                                      *fromElement, *toElement, subflags,
-                                      locator.withPathElement(
-                                        LocatorPathElt::getGenericArgument(0)));
-    }
-  }
-
-  // Bridging the keys/values of a dictionary.
-  if (auto fromKeyValue = isDictionaryType(unwrappedFromType)) {
-    if (auto toKeyValue = isDictionaryType(unwrappedToType)) {
-      addExplicitConversionConstraint(fromKeyValue->first, toKeyValue->first,
-                                      /*allowFixes=*/false,
-                                      locator.withPathElement(
-                                        LocatorPathElt::getGenericArgument(0)));
-      addExplicitConversionConstraint(fromKeyValue->second, toKeyValue->second,
-                                      /*allowFixes=*/false,
-                                      locator.withPathElement(
-                                        LocatorPathElt::getGenericArgument(0)));
-      countOptionalInjections();
-      return SolutionKind::Solved;
-    }
-  }
-
-  // Bridging the elements of a set.
-  if (auto fromElement = isSetType(unwrappedFromType)) {
-    if (auto toElement = isSetType(unwrappedToType)) {
-      countOptionalInjections();
-      return simplifyBridgingConstraint(
-                                      *fromElement, *toElement, subflags,
-                                      locator.withPathElement(
-                                        LocatorPathElt::getGenericArgument(0)));
-    }
-  }
-
   return SolutionKind::Error;
 }
 

@@ -22,10 +22,6 @@
 #include "swiftc/AST/ProtocolConformance.h"
 #include "swiftc/Basic/Demangle.h"
 #include "swiftc/Basic/Punycode.h"
-#include "clang/Basic/CharInfo.h"
-#include "clang/AST/Attr.h"
-#include "clang/AST/Decl.h"
-#include "clang/AST/DeclObjC.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
@@ -129,16 +125,13 @@ void Mangler::mangleContextOf(const ValueDecl *decl) {
   // mangling.
   //   known-context ::= 'So'
   if (isa<ClassDecl>(decl) && clangDecl) {
-    assert(isa<clang::ObjCInterfaceDecl>(clangDecl) ||
-           isa<clang::TypedefDecl>(clangDecl));
     Buffer << "So";
     return;
   }
-  
+
   if (isa<ProtocolDecl>(decl) && clangDecl) {
-    assert(isa<clang::ObjCProtocolDecl>(clangDecl));
     Buffer << "So";
-    return; 
+    return;
   }
 
   // Declarations provided by a C module have a special context mangling.

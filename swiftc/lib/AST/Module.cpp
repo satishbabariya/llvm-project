@@ -31,7 +31,6 @@
 #include "swiftc/AST/PrintOptions.h"
 #include "swiftc/Basic/Compiler.h"
 #include "swiftc/Basic/SourceManager.h"
-#include "clang/Basic/Module.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/TinyPtrVector.h"
@@ -465,22 +464,10 @@ void ModuleDecl::lookupMember(SmallVectorImpl<ValueDecl*> &results,
   }
 }
 
-void ModuleDecl::lookupObjCMethods(
-       ObjCSelector selector,
-       SmallVectorImpl<AbstractFunctionDecl *> &results) const {
-  FORWARD(lookupObjCMethods, (selector, results));
-}
-
 void BuiltinUnit::lookupValue(ModuleDecl::AccessPathTy accessPath, DeclName name,
                               NLKind lookupKind,
                               SmallVectorImpl<ValueDecl*> &result) const {
   getCache().lookupValue(name.getBaseName(), lookupKind, *this, result);
-}
-
-void BuiltinUnit::lookupObjCMethods(
-       ObjCSelector selector,
-       SmallVectorImpl<AbstractFunctionDecl *> &results) const {
-  // No @objc methods in the Builtin module.
 }
 
 void SourceFile::lookupValue(ModuleDecl::AccessPathTy accessPath, DeclName name,
@@ -521,15 +508,6 @@ void SourceFile::lookupClassMember(ModuleDecl::AccessPathTy accessPath,
                                    DeclName name,
                                    SmallVectorImpl<ValueDecl*> &results) const {
   getCache().lookupClassMember(accessPath, name, results, *this);
-}
-
-void SourceFile::lookupObjCMethods(
-       ObjCSelector selector,
-       SmallVectorImpl<AbstractFunctionDecl *> &results) const {
-  // FIXME: Make sure this table is complete, somehow.
-  auto known = ObjCMethods.find(selector);
-  if (known == ObjCMethods.end()) return;
-  results.append(known->second.begin(), known->second.end());
 }
 
 void ModuleDecl::getLocalTypeDecls(SmallVectorImpl<TypeDecl*> &Results) const {
@@ -728,7 +706,7 @@ ModuleDecl::lookupConformance(Type type, ProtocolDecl *protocol,
 
     // Due to an IRGen limitation, witness tables cannot be passed from an
     // existential to an archetype parameter, so for now we restrict this to
-    // @objc protocols.
+    // protocols.
     for (auto proto : protocols) {
       if (!proto->isObjC() &&
           !proto->isSpecificProtocol(KnownProtocolKind::AnyObject))
@@ -1345,14 +1323,6 @@ bool ModuleDecl::walk(ASTWalker &Walker) {
   return false;
 }
 
-const clang::Module *ModuleDecl::findUnderlyingClangModule() {
-  for (auto *FU : getFiles()) {
-    if (auto *Mod = FU->getUnderlyingClangModule())
-      return Mod;
-  }
-  return nullptr;
-}
-
 //===----------------------------------------------------------------------===//
 // SourceFile Implementation
 //===----------------------------------------------------------------------===//
@@ -1576,30 +1546,25 @@ StringRef LoadedFile::getFilename() const {
   return "";
 }
 
-static const clang::Module *
-getClangModule(llvm::PointerUnion<const ModuleDecl *, const void *> Union) {
-  return static_cast<const clang::Module *>(Union.get<const void *>());
-}
-
 StringRef ModuleEntity::getName() const {
   assert(!Mod.isNull());
   if (auto SwiftMod = Mod.dyn_cast<const ModuleDecl*>())
     return SwiftMod->getName().str();
-  return getClangModule(Mod)->Name;
+  return StringRef();
 }
 
 std::string ModuleEntity::getFullName() const {
   assert(!Mod.isNull());
   if (auto SwiftMod = Mod.dyn_cast<const ModuleDecl*>())
     return SwiftMod->getName().str();
-  return getClangModule(Mod)->getFullModuleName();
+  return std::string();
 }
 
 bool ModuleEntity::isSystemModule() const {
   assert(!Mod.isNull());
   if (auto SwiftMod = Mod.dyn_cast<const ModuleDecl*>())
     return SwiftMod->isSystemModule();
-  return getClangModule(Mod)->IsSystem;
+  return false;
 }
 
 bool ModuleEntity::isBuiltinModule() const {

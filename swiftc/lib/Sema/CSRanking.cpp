@@ -891,20 +891,6 @@ ConstraintSystem::compareSolutions(ConstraintSystem &cs,
       }
     }
 
-    // If both declarations come from Clang, and one is a type and the other
-    // is a function, prefer the function.
-    if (decl1->hasClangNode() &&
-        decl2->hasClangNode() &&
-        ((isa<TypeDecl>(decl1) &&
-          isa<AbstractFunctionDecl>(decl2)) ||
-         (isa<AbstractFunctionDecl>(decl1) &&
-          isa<TypeDecl>(decl2)))) {
-      if (isa<TypeDecl>(decl1))
-        ++score2;
-      else
-        ++score1;
-    }
-
     // A class member is always better than a curried instance member.
     // If the members agree on instance-ness, a property is better than a
     // method (because a method is usually immediately invoked).

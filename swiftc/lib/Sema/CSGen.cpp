@@ -2781,30 +2781,6 @@ namespace {
       return E->getType();
     }
 
-    Type visitObjCSelectorExpr(ObjCSelectorExpr *E) {
-      // #selector only makes sense when we have the Objective-C
-      // runtime.
-      auto &tc = CS.getTypeChecker();
-      if (!tc.Context.LangOpts.EnableObjCInterop) {
-        tc.diagnose(E->getLoc(), diag::expr_selector_no_objc_runtime);
-        return nullptr;
-      }
-
-      
-      // Make sure we can reference ObjectiveC.Selector.
-      // FIXME: Fix-It to add the import?
-      auto type = CS.getTypeChecker().getObjCSelectorType(CS.DC);
-      if (!type) {
-        tc.diagnose(E->getLoc(), diag::expr_selector_module_missing);
-        return nullptr;
-      }
-
-      return type;
-    }
-
-    Type visitObjCKeyPathExpr(ObjCKeyPathExpr *E) {
-      return E->getSemanticExpr()->getType();
-    }
   };
 
   /// \brief AST walker that "sanitizes" an expression for the
@@ -2897,19 +2873,6 @@ namespace {
     ConstraintWalker(ConstraintGenerator &CG) : CG(CG) { }
 
     std::pair<bool, Expr *> walkToExprPre(Expr *expr) override {
-      // Note that the subexpression of a #selector expression is
-      // unevaluated.
-      if (auto sel = dyn_cast<ObjCSelectorExpr>(expr)) {
-        CG.getConstraintSystem().UnevaluatedRootExprs.insert(sel->getSubExpr());
-      }
-
-      // Check a key-path expression, which fills in its semantic
-      // expression as a string literal.
-      if (auto keyPath = dyn_cast<ObjCKeyPathExpr>(expr)) {
-        auto &cs = CG.getConstraintSystem();
-        (void)cs.getTypeChecker().checkObjCKeyPathExpr(cs.DC, keyPath);
-      }
-
       // For closures containing only a single expression, the body participates
       // in type checking.
       if (auto closure = dyn_cast<ClosureExpr>(expr)) {

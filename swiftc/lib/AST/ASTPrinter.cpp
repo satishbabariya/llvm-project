@@ -38,10 +38,6 @@
 #include "swiftc/Parse/Lexer.h"
 #include "swiftc/Sema/IDETypeChecking.h"
 #include "swiftc/Strings.h"
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/Decl.h"
-#include "clang/AST/DeclObjC.h"
-#include "clang/Basic/Module.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/SaveAndRestore.h"
@@ -709,31 +705,8 @@ class PrintAST : public ASTVisitor<PrintAST> {
     Printer << Ctx.SourceMgr.extractText(Range);
   }
 
-  void printClangDocumentationComment(const clang::Decl *D) {
-    const auto &ClangContext = D->getASTContext();
-    const clang::RawComment *RC = ClangContext.getRawCommentForAnyRedecl(D);
-    if (!RC)
-      return;
-
-    bool Invalid;
-    unsigned StartLocCol =
-        ClangContext.getSourceManager().getSpellingColumnNumber(
-            RC->getLocStart(), &Invalid);
-    if (Invalid)
-      StartLocCol = 0;
-
-    unsigned WhitespaceToTrim = StartLocCol ? StartLocCol - 1 : 0;
-
-    SmallVector<StringRef, 8> Lines;
-
-    StringRef RawText =
-        RC->getRawText(ClangContext.getSourceManager()).rtrim("\n\r");
-    trimLeadingWhitespaceFromLines(RawText, WhitespaceToTrim, Lines);
-
-    for (auto Line : Lines) {
-      Printer << ASTPrinter::sanitizeUtf8(Line);
-      Printer.printNewline();
-    }
+  void printClangDocumentationComment(const void *D) {
+    // Clang documentation comment printing removed (ObjC interop).
   }
 
   void printRawComment(RawComment RC) {
@@ -1479,27 +1452,6 @@ bool swift::shouldPrint(const Decl *D, PrintOptions &Options) {
       if (VD->getOverriddenDecl()) return false;
       if (!VD->getSatisfiedProtocolRequirements().empty()) return false;
 
-      if (auto clangDecl = VD->getClangDecl()) {
-        // If the Clang declaration is from a protocol but was mirrored into
-        // class or extension thereof, treat it as an override.
-        if (isa<clang::ObjCProtocolDecl>(clangDecl->getDeclContext()) &&
-            VD->getDeclContext()->getAsClassOrClassExtensionContext())
-          return false;
-
-        // Check whether Clang considers it an override.
-        if (auto objcMethod = dyn_cast<clang::ObjCMethodDecl>(clangDecl)) {
-          SmallVector<const clang::ObjCMethodDecl *, 4> overriddenMethods;
-          objcMethod->getOverriddenMethods(overriddenMethods);
-          if (!overriddenMethods.empty()) return false;
-        } else if (auto objcProperty
-                     = dyn_cast<clang::ObjCPropertyDecl>(clangDecl)) {
-          if (auto getter = objcProperty->getGetterMethodDecl()) {
-            SmallVector<const clang::ObjCMethodDecl *, 4> overriddenMethods;
-            getter->getOverriddenMethods(overriddenMethods);
-            if (!overriddenMethods.empty()) return false;
-          }
-        }
-      }
     }
   }
 
@@ -1925,31 +1877,13 @@ void PrintAST::printInherited(const GenericTypeParamDecl *D) {
   printInherited(D, D->getInherited(), { });
 }
 
-static void getModuleEntities(const clang::Module *ClangMod,
-                              SmallVectorImpl<ModuleEntity> &ModuleEnts) {
-  if (!ClangMod)
-    return;
-
-  getModuleEntities(ClangMod->Parent, ModuleEnts);
-  ModuleEnts.push_back(ClangMod);
-}
-
 static void getModuleEntities(ImportDecl *Import,
                               SmallVectorImpl<ModuleEntity> &ModuleEnts) {
-  if (auto *ClangMod = Import->getClangModule()) {
-    getModuleEntities(ClangMod, ModuleEnts);
-    return;
-  }
-
   auto Mod = Import->getModule();
   if (!Mod)
     return;
 
-  if (auto *ClangMod = Mod->findUnderlyingClangModule()) {
-    getModuleEntities(ClangMod, ModuleEnts);
-  } else {
-    ModuleEnts.push_back(Mod);
-  }
+  ModuleEnts.push_back(Mod);
 }
 
 void PrintAST::visitImportDecl(ImportDecl *decl) {

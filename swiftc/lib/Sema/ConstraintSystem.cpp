@@ -175,26 +175,6 @@ void ConstraintSystem::addTypeVariableConstraintsToWorkList(
   }
 }
 
-/// Retrieve a dynamic result signature for the given declaration.
-static std::tuple<char, ObjCSelector, CanType>
-getDynamicResultSignature(ValueDecl *decl) {
-  if (auto func = dyn_cast<AbstractFunctionDecl>(decl)) {
-    // Handle functions.
-    auto type =
-      decl->getInterfaceType()->castTo<AnyFunctionType>()->getResult();
-    return std::make_tuple(func->isStatic(), func->getObjCSelector(),
-                           type->getCanonicalType());
-  }
-
-  if (auto asd = dyn_cast<AbstractStorageDecl>(decl)) {
-    // Handle properties and subscripts, anchored by the getter's selector.
-    return std::make_tuple(asd->isStatic(), asd->getObjCGetterSelector(),
-                           asd->getInterfaceType()->getCanonicalType());
-  }
-
-  llvm_unreachable("Not a valid @objc member");
-}
-
 LookupResult &ConstraintSystem::lookupMember(Type base, DeclName name) {
   // Check whether we've already performed this lookup.
   auto knownMember = MemberLookups.find({base, name});
@@ -219,13 +199,9 @@ LookupResult &ConstraintSystem::lookupMember(Type base, DeclName name) {
                              KnownProtocolKind::AnyObject))
     return *result;
 
-  // We are performing dynamic lookup. Filter out redundant results early.
-  llvm::DenseSet<std::tuple<char, ObjCSelector, CanType>> known;
+  // We are performing dynamic lookup. Filter out invalid results early.
   result->filter([&](ValueDecl *decl) -> bool {
-    if (decl->isInvalid())
-      return false;
-
-    return known.insert(getDynamicResultSignature(decl)).second;
+    return !decl->isInvalid();
   });
 
   return *result;

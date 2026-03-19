@@ -18,7 +18,6 @@
 #include "swiftc/AST/AST.h"
 #include "swiftc/AST/ASTPrinter.h"
 #include "swiftc/AST/ASTVisitor.h"
-#include "swiftc/AST/ForeignErrorConvention.h"
 #include "swiftc/AST/GenericEnvironment.h"
 #include "swiftc/AST/Initializer.h"
 #include "swiftc/AST/ParameterList.h"
@@ -594,8 +593,6 @@ namespace {
 
       if (VD->isFinal())
         OS << " final";
-      if (VD->isObjC())
-        OS << " @objc";
     }
 
     void printCommon(NominalTypeDecl *NTD, const char *Name,
@@ -752,41 +749,6 @@ namespace {
         D->getCaptureInfo().print(OS);
       }
 
-      if (auto fec = D->getForeignErrorConvention()) {
-        OS << " foreign_error=";
-        bool wantResultType = false;
-        switch (fec->getKind()) {
-        case ForeignErrorConvention::ZeroResult:
-          OS << "ZeroResult";
-          wantResultType = true;
-          break;
-
-        case ForeignErrorConvention::NonZeroResult:
-          OS << "NonZeroResult";
-          wantResultType = true;
-          break;
-
-        case ForeignErrorConvention::ZeroPreservedResult:
-          OS << "ZeroPreservedResult";
-          break;
-
-        case ForeignErrorConvention::NilResult:
-          OS << "NilResult";
-          break;
-
-        case ForeignErrorConvention::NonNilError:
-          OS << "NonNilError";
-          break;
-        }
-
-        OS << ((fec->isErrorOwned() == ForeignErrorConvention::IsOwned)
-                ? ",owned"
-                : ",unowned");
-        OS << ",param=" << llvm::utostr(fec->getErrorParameterIndex());
-        OS << ",paramtype=" << fec->getErrorParameterType().getString();
-        if (wantResultType)
-          OS << ",resulttype=" << fec->getResultType().getString();
-      }
     }
 
     void printParameter(const ParamDecl *P) {
@@ -2404,44 +2366,11 @@ public:
   }
   void visitObjCSelectorExpr(ObjCSelectorExpr *E) {
     printCommon(E, "objc_selector_expr");
-    OS << " kind=";
-    switch (E->getSelectorKind()) {
-      case ObjCSelectorExpr::Method:
-        OS << "method";
-        break;
-      case ObjCSelectorExpr::Getter:
-        OS << "getter";
-        break;
-      case ObjCSelectorExpr::Setter:
-        OS << "setter";
-        break;
-    }
-    OS << " decl=";
-    if (auto method = E->getMethod()) {
-      method->dumpRef(OS);
-    } else {
-      OS << "<unresolved>";
-    }
-    OS << '\n';
-    printRec(E->getSubExpr());
     PrintWithColorRAII(OS, ParenthesisColor) << ')';
   }
 
   void visitObjCKeyPathExpr(ObjCKeyPathExpr *E) {
     printCommon(E, "keypath_expr");
-    for (unsigned i = 0, n = E->getNumComponents(); i != n; ++i) {
-      OS << "\n";
-      OS.indent(Indent + 2);
-      OS << "component=";
-      if (auto decl = E->getComponentDecl(i))
-        decl->dumpRef(OS);
-      else
-        OS << E->getComponentName(i);
-    }
-    if (auto semanticE = E->getSemanticExpr()) {
-      OS << '\n';
-      printRec(semanticE);
-    }
     OS << ")";
   }
 };

@@ -1207,66 +1207,16 @@ ArrayRef<ValueDecl *> NominalTypeDecl::lookupDirect(DeclName name,
 }
 
 void ClassDecl::createObjCMethodLookup() {
-  assert(!ObjCMethodLookup && "Already have an Objective-C member table");
-  auto &ctx = getASTContext();
-  ObjCMethodLookup = new (ctx) ObjCMethodLookupTable();
-
-  // Register a cleanup with the ASTContext to call the lookup table
-  // destructor.
-  ctx.addCleanup([this]() {
-    this->ObjCMethodLookup->destroy();
-  });
+  // ObjC method lookup removed.
 }
 
 MutableArrayRef<AbstractFunctionDecl *>
 ClassDecl::lookupDirect(ObjCSelector selector, bool isInstance) {
-  if (!ObjCMethodLookup) {
-    createObjCMethodLookup();
-  }
-
-  // If any modules have been loaded since we did the search last (or if we
-  // hadn't searched before), look in those modules, too.
-  auto &stored = (*ObjCMethodLookup)[{selector, isInstance}];
-  ASTContext &ctx = getASTContext();
-  if (ctx.getCurrentGeneration() > stored.Generation) {
-    ctx.loadObjCMethods(this, selector, isInstance, stored.Generation,
-                        stored.Methods);
-    stored.Generation = ctx.getCurrentGeneration();
-  }
-
-  return { stored.Methods.begin(), stored.Methods.end() };
+  return { };
 }
 
 void ClassDecl::recordObjCMethod(AbstractFunctionDecl *method) {
-  if (!ObjCMethodLookup) {
-    createObjCMethodLookup();
-  }
-
-  assert(method->isObjC() && "Not an Objective-C method");
-
-  // Record the method.
-  bool isInstanceMethod = method->isObjCInstanceMethod();
-  auto selector = method->getObjCSelector();
-  auto &vec = (*ObjCMethodLookup)[{selector, isInstanceMethod}].Methods;
-
-  // In a non-empty vector, we could have duplicates or conflicts.
-  if (!vec.empty()) {
-    // Check whether we have a duplicate. This only checks more than one
-    // element in ill-formed code, so the linear search is acceptable.
-    if (std::find(vec.begin(), vec.end(), method) != vec.end())
-      return;
-
-    if (vec.size() == 1) {
-      // We have a conflict.
-      getASTContext().recordObjCMethodConflict(this, selector,
-                                               isInstanceMethod);
-    }
-  } else {
-    // Record the first method that has this selector.
-    getASTContext().recordObjCMethod(method);
-  }
-
-  vec.push_back(method);
+  // ObjC method recording removed.
 }
 
 static bool checkAccessibility(const DeclContext *useDC,
@@ -1640,17 +1590,5 @@ bool DeclContext::lookupQualified(Type type,
 void DeclContext::lookupAllObjCMethods(
        ObjCSelector selector,
        SmallVectorImpl<AbstractFunctionDecl *> &results) const {
-  // Collect all of the methods with this selector.
-  forAllVisibleModules(this, [&](ModuleDecl::ImportedModule import) {
-    import.second->lookupObjCMethods(selector, results);
-  });
-
-  // Filter out duplicates.
-  llvm::SmallPtrSet<AbstractFunctionDecl *, 8> visited;
-  results.erase(
-    std::remove_if(results.begin(), results.end(),
-                   [&](AbstractFunctionDecl *func) -> bool {
-                     return !visited.insert(func).second;
-                   }),
-    results.end());
+  // ObjC method lookup removed.
 }
