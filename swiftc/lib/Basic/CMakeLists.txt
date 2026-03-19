@@ -1,0 +1,42 @@
+add_swiftc_library(SwiftBasic
+  BasicSourceInfo.cpp
+  BlockList.cpp
+  CASOptions.cpp
+  Cache.cpp
+  ClusteredBitVector.cpp
+  DiverseStack.cpp
+  Edit.cpp
+  EditorPlaceholder.cpp
+  ExponentialGrowthAppendingBinaryByteStream.cpp
+  FileSystem.cpp
+  FileTypes.cpp
+  Fingerprint.cpp
+  JSONSerialization.cpp
+  LangOptions.cpp
+  Located.cpp
+  Mangler.cpp
+  OutputFileMap.cpp
+  ParseableOutput.cpp
+  Platform.cpp
+  PrefixMap.cpp
+  PrettyStackTrace.cpp
+  PrimitiveParsing.cpp
+  Program.cpp
+  QuotedString.cpp
+  Sandbox.cpp
+  SmallBitVector.cpp
+  SourceLoc.cpp
+  StableHasher.cpp
+  Statistic.cpp
+  StringExtras.cpp
+  TargetInfo.cpp
+  TaskQueue.cpp
+  ThreadSafeRefCounted.cpp
+  UUID.cpp
+  Unicode.cpp
+  Version.cpp
+
+  LINK_COMPONENTS
+  Support
+  TargetParser
+)
