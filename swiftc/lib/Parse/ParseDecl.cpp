@@ -369,7 +369,6 @@ bool Parser::parseNewDeclAttribute(DeclAttributes &Attributes, SourceLoc AtLoc,
   }
 
   case DAK_RawDocComment:
-  case DAK_ObjCBridged:
   case DAK_SynthesizedProtocol:
     llvm_unreachable("virtual attributes should not be parsed "
                      "by attribute parsing code");
@@ -626,35 +625,6 @@ bool Parser::parseNewDeclAttribute(DeclAttributes &Attributes, SourceLoc AtLoc,
     Attributes.add(new (Context) AlignmentAttr(alignmentValue, AtLoc, range,
                                                /*implicit*/ false));
     
-    break;
-  }
-  
-  case DAK_SwiftNativeObjCRuntimeBase: {
-    if (!consumeIf(tok::l_paren)) {
-      diagnose(Loc, diag::attr_expected_lparen, AttrName,
-               DeclAttribute::isDeclModifier(DK));
-      return false;
-    }
-
-    if (Tok.isNot(tok::identifier)) {
-      diagnose(Loc, diag::swift_native_objc_runtime_base_must_be_identifier);
-      return false;
-    }
-    
-    Identifier name = Context.getIdentifier(Tok.getText());
-    
-    consumeToken(tok::identifier);
-    
-    auto range = SourceRange(Loc, Tok.getRange().getStart());
-
-    if (!consumeIf(tok::r_paren)) {
-      diagnose(Loc, diag::attr_expected_rparen, AttrName,
-               DeclAttribute::isDeclModifier(DK));
-      return false;
-    }
-    
-    Attributes.add(new (Context) SwiftNativeObjCRuntimeBaseAttr(name,
-                                            AtLoc, range, /*implicit*/ false));
     break;
   }
   

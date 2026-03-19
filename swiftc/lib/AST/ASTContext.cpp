@@ -1558,43 +1558,6 @@ namespace {
   };
 } // end anonymous namespace
 
-/// Compute the information used to describe an Objective-C redeclaration.
-std::pair<unsigned, DeclName> swift::getObjCMethodDiagInfo(
-                                AbstractFunctionDecl *member) {
-  if (isa<ConstructorDecl>(member))
-    return { 0 + member->isImplicit(), member->getFullName() };
-
-  if (isa<DestructorDecl>(member))
-    return { 2 + member->isImplicit(), member->getFullName() };
-
-  auto func = cast<FuncDecl>(member);
-  switch (func->getAccessorKind()) {
-  case AccessorKind::IsAddressor:
-  case AccessorKind::IsDidSet:
-  case AccessorKind::IsMaterializeForSet:
-  case AccessorKind::IsMutableAddressor:
-  case AccessorKind::IsWillSet:
-    llvm_unreachable("Not an Objective-C entry point");
-
-  case AccessorKind::IsGetter:
-    if (auto var = dyn_cast<VarDecl>(func->getAccessorStorageDecl()))
-      return { 5, var->getFullName() };
-
-    return { 6, Identifier() };
-
-  case AccessorKind::IsSetter:
-    if (auto var = dyn_cast<VarDecl>(func->getAccessorStorageDecl()))
-      return { 7, var->getFullName() };
-    return { 8, Identifier() };
-
-  case AccessorKind::NotAccessor:
-    // Normal method.
-    return { 4, func->getFullName() };
-  }
-
-  llvm_unreachable("Unhandled AccessorKind in switch.");
-}
-
 bool swift::fixDeclarationName(InFlightDiagnostic &diag, ValueDecl *decl,
                                DeclName targetName) {
   if (decl->isImplicit()) return false;

@@ -193,14 +193,8 @@ public:
     }
   }
 
-  void visitIBActionAttr(IBActionAttr *attr);
   void visitLazyAttr(LazyAttr *attr);
-  void visitIBDesignableAttr(IBDesignableAttr *attr);
-  void visitIBInspectableAttr(IBInspectableAttr *attr);
-  void visitGKInspectableAttr(GKInspectableAttr *attr);
-  void visitIBOutletAttr(IBOutletAttr *attr);
   void visitLLDBDebuggerFunctionAttr(LLDBDebuggerFunctionAttr *attr);
-  void visitNSManagedAttr(NSManagedAttr *attr);
   void visitOverrideAttr(OverrideAttr *attr);
   void visitAccessibilityAttr(AccessibilityAttr *attr);
   void visitSetterAccessibilityAttr(SetterAccessibilityAttr *attr);
@@ -267,41 +261,6 @@ void AttributeEarlyChecker::visitDynamicAttr(DynamicAttr *attr) {
     return diagnoseAndRemoveAttr(attr, diag::dynamic_with_final);
 }
 
-
-void AttributeEarlyChecker::visitIBActionAttr(IBActionAttr *attr) {
-  // Only instance methods returning () can be IBActions.
-  const FuncDecl *FD = cast<FuncDecl>(D);
-  if (!FD->getDeclContext()->getAsClassOrClassExtensionContext() ||
-      FD->isStatic() || FD->isAccessor())
-    return diagnoseAndRemoveAttr(attr, diag::invalid_ibaction_decl);
-
-}
-
-void AttributeEarlyChecker::visitIBDesignableAttr(IBDesignableAttr *attr) {
-  if (auto *ED = dyn_cast<ExtensionDecl>(D)) {
-    NominalTypeDecl *extendedType = ED->getExtendedType()->getAnyNominal();
-    if (extendedType && !isa<ClassDecl>(extendedType))
-      return diagnoseAndRemoveAttr(attr, diag::invalid_ibdesignable_extension);
-  }
-}
-
-void AttributeEarlyChecker::visitIBInspectableAttr(IBInspectableAttr *attr) {
-  // Only instance properties can be 'IBInspectable'.
-  auto *VD = cast<VarDecl>(D);
-  if (!VD->getDeclContext()->getAsClassOrClassExtensionContext() ||
-      VD->isStatic())
-    return diagnoseAndRemoveAttr(attr, diag::invalid_ibinspectable,
-                                 attr->getAttrName());
-}
-
-void AttributeEarlyChecker::visitGKInspectableAttr(GKInspectableAttr *attr) {
-  // Only instance properties can be 'GKInspectable'.
-  auto *VD = cast<VarDecl>(D);
-  if (!VD->getDeclContext()->getAsClassOrClassExtensionContext() ||
-      VD->isStatic())
-    return diagnoseAndRemoveAttr(attr, diag::invalid_ibinspectable,
-                                 attr->getAttrName());
-}
 
 void AttributeEarlyChecker::visitSILStoredAttr(SILStoredAttr *attr) {
   auto *VD = cast<VarDecl>(D);
