@@ -23,13 +23,6 @@ target_link_libraries(swiftc
   swiftcFrontendTool
 )
 
-clang_target_link_libraries(swiftc
-  PRIVATE
-  clangDriver
-  clangOptions
-  clangBasic
-)
-
 # This creates the executable with a version appended
 # and creates a symlink to it without the version
 if(CYGWIN OR NOT WIN32) # but it doesn't work on Windows

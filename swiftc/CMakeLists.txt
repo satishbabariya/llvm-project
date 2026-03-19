@@ -65,21 +65,6 @@ if (SWIFTC_STANDALONE_BUILD)
     list(APPEND CMAKE_MODULE_PATH ${LLVM_DIR})
   endif()
 
-  # Users might specify a path to CLANG_DIR that's:
-  #   * a full path, or
-  #   * a path relative to the path of this script.
-  if (CLANG_DIR)
-    get_filename_component(
-      CLANG_DIR_ABSOLUTE
-      ${CLANG_DIR}
-      REALPATH
-      BASE_DIR ${CMAKE_CURRENT_BINARY_DIR})
-    list(APPEND CMAKE_MODULE_PATH ${CLANG_DIR_ABSOLUTE})
-    find_package(Clang REQUIRED PATHS "${CLANG_DIR_ABSOLUTE}" NO_DEFAULT_PATH)
-  else()
-    find_package(Clang REQUIRED)
-    list(APPEND CMAKE_MODULE_PATH ${Clang_DIR})
-  endif()
 
   # If LLVM links to zlib we need the imported targets so we can too.
   if(LLVM_ENABLE_ZLIB)
@@ -102,8 +87,6 @@ if (SWIFTC_STANDALONE_BUILD)
   include(HandleLLVMOptions)
   include(VersionFromVCS)
   include(GetErrcMessages)
-
-  include(AddClang)
 
   include(TableGen)
 
@@ -178,15 +161,6 @@ mark_as_advanced(SWIFTC_TOOLS_INSTALL_DIR)
 
 set(SWIFTC_INCLUDE_DIR ${SWIFTC_BINARY_DIR}/include)
 
-# TODO: Remove when libclangDriver is lifted out of Clang
-if(SWIFTC_STANDALONE_BUILD)
-  set(CLANG_INCLUDE_DIR ${CLANG_INCLUDE_DIRS} )
-else()
-  set(CLANG_INCLUDE_DIR ${LLVM_MAIN_SRC_DIR}/../clang/include )
-  set(CLANG_TABLEGEN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/tools/clang/include)
-  include_directories(SYSTEM ${CLANG_TABLEGEN_OUTPUT_DIR})
-endif()
-include_directories(SYSTEM ${CLANG_INCLUDE_DIR})
 
 # tco tool output directories
 if(SWIFTC_STANDALONE_BUILD)

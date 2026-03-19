@@ -1,7 +1,57 @@
 add_swiftc_library(SwiftAST
-  AST.cpp
+  ArchetypeBuilder.cpp
+  ASTContext.cpp
+  ASTDumper.cpp
+  ASTMangler.cpp
+  ASTNode.cpp
+  ASTPrinter.cpp
+  ASTScope.cpp
+  ASTVerifier.cpp
+  ASTWalker.cpp
+  Attr.cpp
+  Availability.cpp
+  AvailabilitySpec.cpp
+  Builtins.cpp
+  CaptureInfo.cpp
+  ConcreteDeclRef.cpp
+  ConformanceLookupTable.cpp
+  Decl.cpp
+  DeclContext.cpp
+  DeclNameLoc.cpp
+  DefaultArgumentKind.cpp
+  DiagnosticEngine.cpp
+  DiagnosticList.cpp
+  DocComment.cpp
+  Expr.cpp
+  GenericEnvironment.cpp
+  GenericSignature.cpp
+  Identifier.cpp
+  LayoutConstraint.cpp
+  LookupVisibleDecls.cpp
+  Mangle.cpp
+  Module.cpp
+  ModuleNameLookup.cpp
+  NameLookup.cpp
+  Parameter.cpp
+  Pattern.cpp
+  PlatformKind.cpp
+  PrettyStackTrace.cpp
+  ProtocolConformance.cpp
+  RawComment.cpp
+  SILLayout.cpp
+  Stmt.cpp
+  SourceEntityWalker.cpp
+  Substitution.cpp
+  SubstitutionMap.cpp
+  Type.cpp
+  TypeJoinMeet.cpp
+  TypeRefinementContext.cpp
+  TypeRepr.cpp
+  TypeWalker.cpp
+  USRGeneration.cpp
 
   LINK_LIBS
+  SwiftBasic
   SwiftSupport
 
   LINK_COMPONENTS

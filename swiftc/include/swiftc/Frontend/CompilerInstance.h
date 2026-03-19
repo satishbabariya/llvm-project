@@ -11,8 +11,6 @@
 
 #include "swiftc/Frontend/CompilerInvocation.h"
 #include "swiftc/Frontend/FrontendOptions.h"
-#include "clang/Basic/Diagnostic.h"
-#include "clang/Basic/DiagnosticOptions.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include <memory>
 
@@ -21,7 +19,6 @@ namespace frontend {
 
 class CompilerInstance {
   CompilerInvocation invocation;
-  std::shared_ptr<clang::DiagnosticsEngine> diagnostics;
   FrontendOptions frontendOpts;
 
 public:
@@ -30,13 +27,6 @@ public:
 
   CompilerInvocation &getInvocation() { return invocation; }
   const CompilerInvocation &getInvocation() const { return invocation; }
-
-  bool hasDiagnostics() const { return diagnostics != nullptr; }
-  clang::DiagnosticsEngine &getDiagnostics() const { return *diagnostics; }
-
-  void createDiagnostics(
-      clang::DiagnosticConsumer *client = nullptr,
-      bool shouldOwnClient = true);
 
   FrontendOptions &getFrontendOpts() { return frontendOpts; }
   const FrontendOptions &getFrontendOpts() const { return frontendOpts; }

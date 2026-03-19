@@ -9,16 +9,22 @@
 #ifndef SWIFTC_FRONTEND_TEXTDIAGNOSTICBUFFER_H
 #define SWIFTC_FRONTEND_TEXTDIAGNOSTICBUFFER_H
 
-#include "clang/Basic/Diagnostic.h"
 #include <string>
 #include <vector>
 
 namespace Swift {
 namespace frontend {
 
-class TextDiagnosticBuffer : public clang::DiagnosticConsumer {
+class TextDiagnosticBuffer {
 public:
-  using DiagList = std::vector<std::pair<clang::SourceLocation, std::string>>;
+  enum class DiagLevel {
+    Error,
+    Warning,
+    Remark,
+    Note,
+  };
+
+  using DiagList = std::vector<std::pair<unsigned, std::string>>;
 
 private:
   DiagList errors;
@@ -32,10 +38,8 @@ public:
   const DiagList &getRemarks() const { return remarks; }
   const DiagList &getNotes() const { return notes; }
 
-  void HandleDiagnostic(clang::DiagnosticsEngine::Level diagLevel,
-                        const clang::Diagnostic &info) override;
-
-  void flushDiagnostics(clang::DiagnosticsEngine &diags) const;
+  void handleDiagnostic(DiagLevel diagLevel, unsigned loc,
+                        const std::string &message);
 };
 
 } // namespace frontend

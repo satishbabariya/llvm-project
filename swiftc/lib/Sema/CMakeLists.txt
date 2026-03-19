@@ -1,8 +1,51 @@
 add_swiftc_library(SwiftSema
-  Sema.cpp
+  CSApply.cpp
+  CSDiag.cpp
+  CSGen.cpp
+  CSRanking.cpp
+  CSSimplify.cpp
+  CSSolver.cpp
+  CodeSynthesis.cpp
+  Constraint.cpp
+  ConstraintGraph.cpp
+  ConstraintLocator.cpp
+  ConstraintSystem.cpp
+  DerivedConformanceEquatableHashable.cpp
+  DerivedConformanceError.cpp
+  DerivedConformanceRawRepresentable.cpp
+  DerivedConformances.cpp
+  ITCDecl.cpp
+  ITCNameLookup.cpp
+  ITCType.cpp
+  InstrumenterSupport.cpp
+  IterativeTypeChecker.cpp
+  MiscDiagnostics.cpp
+  NameBinding.cpp
+  PCMacro.cpp
+  PlaygroundTransform.cpp
+  ResilienceDiagnostics.cpp
+  SourceLoader.cpp
+  TypeCheckAttr.cpp
+  TypeCheckAvailability.cpp
+  TypeCheckCaptures.cpp
+  TypeCheckConstraints.cpp
+  TypeCheckDecl.cpp
+  TypeCheckError.cpp
+  TypeCheckExpr.cpp
+  TypeCheckGeneric.cpp
+  TypeCheckNameLookup.cpp
+  TypeCheckPattern.cpp
+  TypeCheckProtocol.cpp
+  TypeCheckREPL.cpp
+  TypeCheckRequest.cpp
+  TypeCheckStmt.cpp
+  TypeCheckType.cpp
+  TypeChecker.cpp
 
   LINK_LIBS
+  SwiftParse
   SwiftAST
+  SwiftBasic
   SwiftSupport
 
   LINK_COMPONENTS
