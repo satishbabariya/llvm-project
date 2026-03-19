@@ -585,14 +585,6 @@ void Remangler::mangleProtocolConformance(Node *node) {
   mangleChildNode(node, 2);
 }
 
-void Remangler::mangleObjCAttribute(Node *node) {
-  Out << "To";
-}
-
-void Remangler::mangleNonObjCAttribute(Node *node) {
-  Out << "TO";
-}
-
 void Remangler::mangleDirectMethodReferenceAttribute(Node *node) {
   Out << "Td";
 }
@@ -647,11 +639,6 @@ void Remangler::mangleProtocolDescriptor(Node *node) {
 
 void Remangler::manglePartialApplyForwarder(Node *node) {
   Out << "PA__T";
-  mangleSingleChildNode(node); // global
-}
-
-void Remangler::manglePartialApplyObjCForwarder(Node *node) {
-  Out << "PAo__T";
   mangleSingleChildNode(node); // global
 }
 
@@ -1042,11 +1029,6 @@ void Remangler::mangleUncurriedFunctionType(Node *node) {
   mangleChildNodes(node); // argument tuple, result type
 }
 
-void Remangler::mangleObjCBlock(Node *node) {
-  Out << 'b';
-  mangleChildNodes(node); // argument tuple, result type
-}
-
 void Remangler::mangleCFunctionPointer(Node *node) {
   Out << 'c';
   mangleChildNodes(node); // argument tuple, result type
@@ -1115,8 +1097,6 @@ void Remangler::mangleImplFunctionAttribute(Node *node) {
     Out << "Cc";
   } else if (text == "@convention(method)") {
     Out << "Cm";
-  } else if (text == "@convention(objc_method)") {
-    Out << "CO";
   } else if (text == "@convention(witness_method)") {
     Out << "Cw";
   } else {
@@ -1208,8 +1188,6 @@ void Remangler::mangleMetatypeRepresentation(Node *node) {
     Out << 't';
   } else if (text == "@thick") {
     Out << 'T';
-  } else if (text == "@objc_metatype") {
-    Out << 'o';
   } else {
     unreachable("bad metatype representation");
   }

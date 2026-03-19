@@ -908,8 +908,6 @@ void Remangler::mangleFunctionSignatureSpecializationParam(Node *node) {
         Buffer << 'b';
       } else if (encodingStr == "u16") {
         Buffer << 'w';
-      } else if (encodingStr == "objc") {
-        Buffer << 'c';
       } else {
         unreachable("Unknown encoding");
       }
@@ -1037,8 +1035,6 @@ void Remangler::mangleGlobal(Node *node) {
       case Node::Kind::GenericSpecializationNotReAbstracted:
       case Node::Kind::GenericPartialSpecialization:
       case Node::Kind::GenericPartialSpecializationNotReAbstracted:
-      case Node::Kind::ObjCAttribute:
-      case Node::Kind::NonObjCAttribute:
       case Node::Kind::DynamicAttribute:
       case Node::Kind::VTableAttribute:
       case Node::Kind::DirectMethodReferenceAttribute:
@@ -1138,7 +1134,6 @@ void Remangler::mangleImplFunctionType(Node *node) {
                         .Case("@convention(block)", 'B')
                         .Case("@convention(c)", 'C')
                         .Case("@convention(method)", 'M')
-                        .Case("@convention(objc_method)", 'O')
                         .Case("@convention(closure)", 'K')
                         .Case("@convention(witness_method)", 'W')
                         .Default(0);
@@ -1254,8 +1249,6 @@ void Remangler::mangleMetatypeRepresentation(Node *node) {
     Buffer << 't';
   } else if (node->getText() == "@thick") {
     Buffer << 'T';
-  } else if (node->getText() == "@objc_metatype") {
-    Buffer << 'o';
   } else {
     unreachable("wrong metatype representation");
   }
@@ -1295,10 +1288,6 @@ void Remangler::mangleNominalTypeDescriptor(Node *node) {
   Buffer << "Mn";
 }
 
-void Remangler::mangleNonObjCAttribute(Node *node) {
-  Buffer << "TO";
-}
-
 void Remangler::mangleNonVariadicTuple(Node *node) {
   mangleTypeList(node);
   Buffer << 't';
@@ -1306,15 +1295,6 @@ void Remangler::mangleNonVariadicTuple(Node *node) {
 
 void Remangler::mangleNumber(Node *node) {
   mangleIndex(node->getIndex());
-}
-
-void Remangler::mangleObjCAttribute(Node *node) {
-  Buffer << "To";
-}
-
-void Remangler::mangleObjCBlock(Node *node) {
-  mangleChildNodesReversed(node);
-  Buffer << "XB";
 }
 
 void Remangler::mangleOwningAddressor(Node *node) {
@@ -1330,11 +1310,6 @@ void Remangler::mangleOwningMutableAddressor(Node *node) {
 void Remangler::manglePartialApplyForwarder(Node *node) {
   mangleChildNodesReversed(node);
   Buffer << "TA";
-}
-
-void Remangler::manglePartialApplyObjCForwarder(Node *node) {
-  mangleChildNodesReversed(node);
-  Buffer << "Ta";
 }
 
 void Remangler::manglePostfixOperator(Node *node) {

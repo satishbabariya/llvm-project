@@ -1120,7 +1120,6 @@ NodePointer Demangler::demangleFuncSpecParam(Node::IndexType ParamIdx) {
           switch (nextChar()) {
             case 'b': Encoding = "u8"; break;
             case 'w': Encoding = "u16"; break;
-            case 'c': Encoding = "objc"; break;
             default: return nullptr;
           }
           NodePointer Str = popNode(Node::Kind::Identifier);
@@ -1312,8 +1311,6 @@ NodePointer Demangler::demangleSpecialType() {
       return popFunctionType(Node::Kind::AutoClosureType);
     case 'U':
       return popFunctionType(Node::Kind::UncurriedFunctionType);
-    case 'B':
-      return popFunctionType(Node::Kind::ObjCBlock);
     case 'C':
       return popFunctionType(Node::Kind::CFunctionPointer);
     case 'o':
@@ -1400,9 +1397,6 @@ NodePointer Demangler::demangleMetatypeRepresentation() {
       return NodeFactory::create(Node::Kind::MetatypeRepresentation, "@thin");
     case 'T':
       return NodeFactory::create(Node::Kind::MetatypeRepresentation, "@thick");
-    case 'o':
-      return NodeFactory::create(Node::Kind::MetatypeRepresentation,
-                                 "@objc_metatype");
     default:
       return nullptr;
   }

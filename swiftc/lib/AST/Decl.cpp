@@ -48,32 +48,6 @@ STATISTIC(NumLazyGenericEnvironments,
 STATISTIC(NumLazyGenericEnvironmentsLoaded,
           "# of lazily-deserialized generic environments loaded");
 
-clang::SourceLocation ClangNode::getLocation() const {
-  if (auto D = getAsDecl())
-    return D->getLocation();
-  if (auto M = getAsMacro())
-    return M->getDefinitionLoc();
-
-  return clang::SourceLocation();
-}
-
-clang::SourceRange ClangNode::getSourceRange() const {
-  if (auto D = getAsDecl())
-    return D->getSourceRange();
-  if (auto M = getAsMacro())
-    return clang::SourceRange(M->getDefinitionLoc(), M->getDefinitionEndLoc());
-
-  return clang::SourceLocation();
-}
-
-const clang::Module *ClangNode::getClangModule() const {
-  if (auto *M = getAsModule())
-    return M;
-  if (auto *ID = dyn_cast_or_null<clang::ImportDecl>(getAsDecl()))
-    return ID->getImportedModule();
-  return nullptr;
-}
-
 // Only allow allocation of Decls using the allocator in ASTContext.
 void *Decl::operator new(size_t Bytes, const ASTContext &C,
                          unsigned Alignment) {
@@ -1610,18 +1584,7 @@ OverloadSignature ValueDecl::getOverloadSignature() const {
 }
 
 void ValueDecl::setIsObjC(bool Value) {
-  bool CurrentValue = isObjC();
-  if (CurrentValue == Value)
-    return;
-
-  if (!Value) {
-    for (auto *Attr : getAttrs()) {
-      if (auto *OA = dyn_cast<ObjCAttr>(Attr))
-        OA->setInvalid();
-    }
-  } else {
-    getAttrs().add(ObjCAttr::createUnnamedImplicit(getASTContext()));
-  }
+  // ObjC interop removed - no-op
 }
 
 bool ValueDecl::canBeAccessedByDynamicLookup() const {
@@ -1708,65 +1671,10 @@ void ValueDecl::setInterfaceType(Type type) {
 }
 
 Optional<ObjCSelector> ValueDecl::getObjCRuntimeName() const {
-  if (auto func = dyn_cast<AbstractFunctionDecl>(this))
-    return func->getObjCSelector();
-
-  ASTContext &ctx = getASTContext();
-  auto makeSelector = [&](Identifier name) -> ObjCSelector {
-    return ObjCSelector(ctx, 0, { name });
-  };
-
-  if (auto classDecl = dyn_cast<ClassDecl>(this)) {
-    SmallString<32> scratch;
-    return makeSelector(
-             ctx.getIdentifier(classDecl->getObjCRuntimeName(scratch)));
-  }
-
-  if (auto protocol = dyn_cast<ProtocolDecl>(this)) {
-    SmallString<32> scratch;
-    return makeSelector(
-             ctx.getIdentifier(protocol->getObjCRuntimeName(scratch)));
-  }
-
-  if (auto var = dyn_cast<VarDecl>(this))
-    return makeSelector(var->getObjCPropertyName());
-
   return None;
 }
 
 bool ValueDecl::canInferObjCFromRequirement(ValueDecl *requirement) {
-  // Only makes sense for a requirement of an @objc protocol.
-  auto proto = cast<ProtocolDecl>(requirement->getDeclContext());
-  if (!proto->isObjC()) return false;
-
-  // Only makes sense when this declaration is within a nominal type
-  // or extension thereof.
-  auto nominal =
-    getDeclContext()->getAsNominalTypeOrNominalTypeExtensionContext();
-  if (!nominal) return false;
-
-  // If there is already an @objc attribute with an explicit name, we
-  // can't infer a name (it's already there).
-  if (auto objcAttr = getAttrs().getAttribute<ObjCAttr>()) {
-    if (!objcAttr->isNameImplicit()) return false;
-  }
-
-  // If the nominal type doesn't conform to the protocol at all, we
-  // cannot infer @objc no matter what we do.
-  SmallVector<ProtocolConformance *, 1> conformances;
-  if (!nominal->lookupConformance(getModuleContext(), proto, conformances))
-    return false;
-
-  // If any of the conformances is attributed to the context in which
-  // this declaration resides, we can infer @objc or the Objective-C
-  // name.
-  auto dc = getDeclContext();
-  for (auto conformance : conformances) {
-    if (conformance->getDeclContext() == dc)
-      return true;
-  }
-
-  // Nothing to infer from.
   return false;
 }
 
@@ -2507,96 +2415,12 @@ bool ClassDecl::inheritsSuperclassInitializers(LazyResolver *resolver) {
 }
 
 ObjCClassKind ClassDecl::checkObjCAncestry() const {
-  // See if we've already computed this.
-  if (ClassDeclBits.ObjCClassKind)
-    return ObjCClassKind(ClassDeclBits.ObjCClassKind - 1);
-
-  llvm::SmallPtrSet<const ClassDecl *, 8> visited;
-  bool genericAncestry = false, isObjC = false;
-  const ClassDecl *CD = this;
-
-  for (;;) {
-    // If we hit circularity, we will diagnose at some point in typeCheckDecl().
-    // However we have to explicitly guard against that here because we get
-    // called as part of validateDecl().
-    if (!visited.insert(CD).second)
-      break;
-
-    if (CD->isGenericContext())
-      genericAncestry = true;
-
-    if (CD->isObjC())
-      isObjC = true;
-
-    if (!CD->hasSuperclass())
-      break;
-    CD = CD->getSuperclass()->getClassOrBoundGenericClass();
-    // If we don't have a valid class here, we should have diagnosed
-    // elsewhere.
-    if (!CD)
-      break;
-  }
-
-  ObjCClassKind kind = ObjCClassKind::ObjC;
-  if (!isObjC)
-    kind = ObjCClassKind::NonObjC;
-  else if (genericAncestry)
-    kind = ObjCClassKind::ObjCMembers;
-  else if (CD == this || !CD->isObjC())
-    kind = ObjCClassKind::ObjCWithSwiftRoot;
-
-  // Save the result for later.
-  const_cast<ClassDecl *>(this)->ClassDeclBits.ObjCClassKind
-    = unsigned(kind) + 1;
-  return kind;
-}
-
-/// Mangle the name of a protocol or class for use in the Objective-C
-/// runtime.
-static StringRef mangleObjCRuntimeName(const NominalTypeDecl *nominal,
-                                       llvm::SmallVectorImpl<char> &buffer) {
-  {
-    // TODO: Mangling: Use new mangling scheme as soon as the ObjC runtime
-    // can demangle it.
-
-    // Mangle the type.
-    Mangle::Mangler mangler(false/*dwarf*/, false/*punycode*/);
-
-    // We add the "_Tt" prefix to make this a reserved name that will
-    // not conflict with any valid Objective-C class or protocol name.
-    mangler.append("_Tt");
-
-    NominalTypeDecl *NTD = const_cast<NominalTypeDecl*>(nominal);
-    if (isa<ClassDecl>(nominal)) {
-      mangler.mangleNominalType(NTD);
-    } else {
-      mangler.mangleProtocolDecl(cast<ProtocolDecl>(NTD));
-    }
-
-    buffer.clear();
-    llvm::raw_svector_ostream os(buffer);
-    mangler.finalize(os);
-  }
-
-  assert(buffer.size() && "Invalid buffer size");
-  return StringRef(buffer.data(), buffer.size());
+  return ObjCClassKind::NonObjC;
 }
 
 StringRef ClassDecl::getObjCRuntimeName(
                        llvm::SmallVectorImpl<char> &buffer) const {
-  // If there is a Clang declaration, use it's runtime name.
-  if (auto objcClass
-        = dyn_cast_or_null<clang::ObjCInterfaceDecl>(getClangDecl()))
-    return objcClass->getObjCRuntimeNameAsString();
-
-  // If there is an 'objc' attribute with a name, use that name.
-  if (auto objc = getAttrs().getAttribute<ObjCAttr>()) {
-    if (auto name = objc->getName())
-      return name->getString(buffer);
-  }
-
-  // Produce the mangled name for this class.
-  return mangleObjCRuntimeName(this, buffer);
+  return StringRef();
 }
 
 ArtificialMainKind ClassDecl::getArtificialMainKind() const {
@@ -2976,14 +2800,7 @@ bool ProtocolDecl::existentialTypeSupportedSlow(LazyResolver *resolver) {
 
 StringRef ProtocolDecl::getObjCRuntimeName(
                           llvm::SmallVectorImpl<char> &buffer) const {
-  // If there is an 'objc' attribute with a name, use that name.
-  if (auto objc = getAttrs().getAttribute<ObjCAttr>()) {
-    if (auto name = objc->getName())
-      return name->getString(buffer);
-  }
-
-  // Produce the mangled name for this protocol.
-  return mangleObjCRuntimeName(this, buffer);
+  return StringRef();
 }
 
 GenericParamList *ProtocolDecl::createGenericParams(DeclContext *dc) {
@@ -3389,72 +3206,12 @@ void AbstractStorageDecl::setInvalidBracesRange(SourceRange BracesRange) {
 
 ObjCSelector AbstractStorageDecl::getObjCGetterSelector(
                LazyResolver *resolver) const {
-  // If the getter has an @objc attribute with a name, use that.
-  if (auto getter = getGetter()) {
-    if (auto objcAttr = getter->getAttrs().getAttribute<ObjCAttr>()) {
-      if (auto name = objcAttr->getName())
-        return *name;
-    }
-  }
-
-  // Subscripts use a specific selector.
-  auto &ctx = getASTContext();
-  if (auto *SD = dyn_cast<SubscriptDecl>(this)) {
-    switch (SD->getObjCSubscriptKind(resolver)) {
-    case ObjCSubscriptKind::None:
-      llvm_unreachable("Not an Objective-C subscript");
-    case ObjCSubscriptKind::Indexed:
-      return ObjCSelector(ctx, 1, ctx.Id_objectAtIndexedSubscript);
-    case ObjCSubscriptKind::Keyed:
-      return ObjCSelector(ctx, 1, ctx.Id_objectForKeyedSubscript);
-    }
-  }
-
-  // The getter selector is the property name itself.
-  auto var = cast<VarDecl>(this);
-  return VarDecl::getDefaultObjCGetterSelector(ctx, var->getObjCPropertyName());
+  return ObjCSelector();
 }
 
 ObjCSelector AbstractStorageDecl::getObjCSetterSelector(
                LazyResolver *resolver) const {
-  // If the setter has an @objc attribute with a name, use that.
-  auto setter = getSetter();
-  auto objcAttr = setter ? setter->getAttrs().getAttribute<ObjCAttr>()
-                         : nullptr;
-  if (objcAttr) {
-    if (auto name = objcAttr->getName())
-      return *name;
-  }
-
-  // Subscripts use a specific selector.
-  auto &ctx = getASTContext();
-  if (auto *SD = dyn_cast<SubscriptDecl>(this)) {
-    switch (SD->getObjCSubscriptKind(resolver)) {
-    case ObjCSubscriptKind::None:
-      llvm_unreachable("Not an Objective-C subscript");
-
-    case ObjCSubscriptKind::Indexed:
-      return ObjCSelector(ctx, 2,
-                          { ctx.Id_setObject, ctx.Id_atIndexedSubscript });
-    case ObjCSubscriptKind::Keyed:
-      return ObjCSelector(ctx, 2,
-                          { ctx.Id_setObject, ctx.Id_forKeyedSubscript });
-    }
-  }
-  
-
-  // The setter selector for, e.g., 'fooBar' is 'setFooBar:', with the
-  // property name capitalized and preceded by 'set'.
-  auto var = cast<VarDecl>(this);
-  auto result = VarDecl::getDefaultObjCSetterSelector(
-                  ctx, 
-                  var->getObjCPropertyName());
-
-  // Cache the result, so we don't perform string manipulation again.
-  if (objcAttr)
-    const_cast<ObjCAttr *>(objcAttr)->setName(result, /*implicit=*/true);
-
-  return result;
+  return ObjCSelector();
 }
 
 SourceLoc AbstractStorageDecl::getOverrideLoc() const {
@@ -3708,27 +3465,17 @@ StaticSpellingKind VarDecl::getCorrectStaticSpelling() const {
 }
 
 Identifier VarDecl::getObjCPropertyName() const {
-  if (auto attr = getAttrs().getAttribute<ObjCAttr>()) {
-    if (auto name = attr->getName())
-      return name->getSelectorPieces()[0];
-  }
-
   return getName();
 }
 
 ObjCSelector VarDecl::getDefaultObjCGetterSelector(ASTContext &ctx,
                                                    Identifier propertyName) {
-  return ObjCSelector(ctx, 0, propertyName);
+  return ObjCSelector();
 }
-
 
 ObjCSelector VarDecl::getDefaultObjCSetterSelector(ASTContext &ctx,
                                                    Identifier propertyName) {
-  llvm::SmallString<16> scratch;
-  scratch += "set";
-  camel_case::appendSentenceCase(scratch, propertyName.str());
-
-  return ObjCSelector(ctx, 1, ctx.getIdentifier(scratch));
+  return ObjCSelector();
 }
 
 /// If this is a simple 'let' constant, emit a note with a fixit indicating
@@ -4014,22 +3761,7 @@ Type SubscriptDecl::getElementInterfaceType() const {
 
 ObjCSubscriptKind SubscriptDecl::getObjCSubscriptKind(
                     LazyResolver *resolver) const {
-  auto indexTy = getIndicesInterfaceType();
-
-  // Look through a named 1-tuple.
-  indexTy = indexTy->getWithoutImmediateLabel();
-
-  // If the index type is an integral type, we have an indexed
-  // subscript.
-  if (isIntegralType(indexTy))
-    return ObjCSubscriptKind::Indexed;
-
-  // If the index type is an object type in Objective-C, we have a
-  // keyed subscript.
-  if (Type objectTy = indexTy->getAnyOptionalObjectType())
-    indexTy = objectTy;
-
-  return ObjCSubscriptKind::Keyed;
+  return ObjCSubscriptKind::None;
 }
 
 SourceRange SubscriptDecl::getSourceRange() const {
