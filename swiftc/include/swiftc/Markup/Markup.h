@@ -1,6 +1,12 @@
-//===-- swiftc/Markup/Markup.h - Markup AST --------------------*- C++ -*-===//
+//===--- Markup.h - Markup --------------------------------------*- C++ -*-===//
 //
-// Stub header for non-migrated Markup module.
+// This source file is part of the Swift.org open source project
+//
+// Copyright (c) 2014 - 2017 Apple Inc. and the Swift project authors
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+// See https://swift.org/LICENSE.txt for license information
+// See https://swift.org/CONTRIBUTORS.txt for the list of Swift project authors
 //
 //===----------------------------------------------------------------------===//
 
@@ -8,9 +14,11 @@
 #define SWIFTC_MARKUP_MARKUP_H
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/Optional.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Allocator.h"
+#include "llvm/Support/raw_ostream.h"
+#include "swiftc/Basic/SourceLoc.h"
+#include "swiftc/Markup/AST.h"
+#include "swiftc/Markup/LineList.h"
 
 namespace swift {
 
@@ -18,30 +26,9 @@ struct RawComment;
 
 namespace markup {
 
-class MarkupASTNode;
-class Document;
-class Paragraph;
-class ParamField;
-class ReturnsField;
-class ThrowsField;
 class LineList;
 
-/// Parsed comment parts extracted from markup.
-struct CommentParts {
-  Optional<const Paragraph *> Brief;
-  Optional<const ReturnsField *> ReturnsField;
-  Optional<const ThrowsField *> ThrowsField;
-  ArrayRef<const ParamField *> ParamFields;
-  ArrayRef<const MarkupASTNode *> BodyNodes;
-
-  bool isEmpty() const {
-    return !Brief.hasValue() && !ReturnsField.hasValue() &&
-           !ThrowsField.hasValue() && ParamFields.empty() &&
-           BodyNodes.empty();
-  }
-};
-
-class MarkupContext {
+class MarkupContext final {
   llvm::BumpPtrAllocator Allocator;
 
 public:
@@ -52,7 +39,7 @@ public:
   template <typename T, typename It>
   T *allocateCopy(It Begin, It End) {
     T *Res =
-        static_cast<T *>(allocate(sizeof(T) * (End - Begin), alignof(T)));
+    static_cast<T *>(allocate(sizeof(T) * (End - Begin), alignof(T)));
     for (unsigned i = 0; Begin != End; ++Begin, ++i)
       new (Res + i) T(*Begin);
     return Res;
@@ -66,7 +53,7 @@ public:
 
   StringRef allocateCopy(StringRef Str) {
     ArrayRef<char> Result =
-        allocateCopy<char, const char *>(Str.data(), Str.data() + Str.size());
+      allocateCopy(llvm::ArrayRef<char>(Str.data(), Str.size()));
     return StringRef(Result.data(), Result.size());
   }
 

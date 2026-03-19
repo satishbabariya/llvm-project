@@ -22,9 +22,7 @@
 // dependencies.
 // Casting.h has complex templates that cannot be easily forward declared.
 #include "llvm/Support/Casting.h"
-// None.h includes an enumerator that is desired & cannot be forward declared
-// without a definition of NoneType.
-#include "llvm/ADT/None.h"
+#include <optional>
 
 // Forward declarations.
 namespace llvm {
@@ -39,7 +37,6 @@ namespace llvm {
   template<typename T> class ArrayRef;
   template<typename T> class MutableArrayRef;
   template<typename T> class TinyPtrVector;
-  template<typename T> class Optional;
   template <typename PT1, typename PT2> class PointerUnion;
 
   // Other common classes.
@@ -57,9 +54,29 @@ namespace swift {
   using llvm::dyn_cast_or_null;
   using llvm::cast_or_null;
 
+  // Compatibility: wraps std::optional with the old llvm::Optional API
+  // (hasValue(), getValue()) used throughout ported Swift code.
+  inline constexpr std::nullopt_t None = std::nullopt;
+  using NoneType = std::nullopt_t;
+
+  template <typename T>
+  class Optional : public std::optional<T> {
+    using Base = std::optional<T>;
+  public:
+    using Base::Base;
+    Optional() : Base() {}
+    Optional(std::nullopt_t) : Base(std::nullopt) {}
+    Optional(const T &V) : Base(V) {}
+    Optional(T &&V) : Base(std::move(V)) {}
+    Optional(const std::optional<T> &O) : Base(O) {}
+    Optional(std::optional<T> &&O) : Base(std::move(O)) {}
+
+    bool hasValue() const { return Base::has_value(); }
+    T &getValue() { return Base::value(); }
+    const T &getValue() const { return Base::value(); }
+  };
+
   // Containers.
-  using llvm::None;
-  using llvm::Optional;
   using llvm::SmallPtrSetImpl;
   using llvm::SmallPtrSet;
   using llvm::SmallString;
@@ -76,7 +93,6 @@ namespace swift {
   using llvm::raw_ostream;
   using llvm::APInt;
   using llvm::APFloat;
-  using llvm::NoneType;
 } // end namespace swift
 
 #endif // SWIFTC_BASIC_LLVM_H
