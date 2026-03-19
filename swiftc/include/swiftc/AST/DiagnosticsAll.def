@@ -38,7 +38,6 @@
 #include "DiagnosticsCommon.def"
 #include "DiagnosticsParse.def"
 #include "DiagnosticsSema.def"
-#include "DiagnosticsClangImporter.def"
 #include "DiagnosticsSIL.def"
 #include "DiagnosticsIRGen.def"
 #include "DiagnosticsFrontend.def"

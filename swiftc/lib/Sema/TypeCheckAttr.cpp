@@ -20,7 +20,6 @@
 #include "swiftc/AST/NameLookup.h"
 #include "swiftc/AST/Types.h"
 #include "swiftc/Parse/Lexer.h"
-#include "swiftc/ClangImporter/ClangModule.h" // FIXME: SDK overlay semantics
 
 using namespace swift;
 
@@ -58,12 +57,6 @@ public:
   IGNORED_ATTR(Infix)
   IGNORED_ATTR(Inline)
   IGNORED_ATTR(Inlineable)
-  IGNORED_ATTR(NSApplicationMain)
-  IGNORED_ATTR(NSCopying)
-  IGNORED_ATTR(NonObjC)
-  IGNORED_ATTR(ObjC)
-  IGNORED_ATTR(ObjCBridged)
-  IGNORED_ATTR(ObjCNonLazyRealization)
   IGNORED_ATTR(Optional)
   IGNORED_ATTR(Postfix)
   IGNORED_ATTR(Prefix)
@@ -73,11 +66,8 @@ public:
   IGNORED_ATTR(Rethrows)
   IGNORED_ATTR(Semantics)
   IGNORED_ATTR(Specialize)
-  IGNORED_ATTR(SwiftNativeObjCRuntimeBase)
   IGNORED_ATTR(SynthesizedProtocol)
   IGNORED_ATTR(Testable)
-  IGNORED_ATTR(UIApplicationMain)
-  IGNORED_ATTR(UnsafeNoObjCTaggedPointer)
   IGNORED_ATTR(Versioned)
   IGNORED_ATTR(ShowInInterface)
   IGNORED_ATTR(DiscardableResult)
