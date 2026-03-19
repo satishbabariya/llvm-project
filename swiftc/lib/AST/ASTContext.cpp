@@ -635,47 +635,6 @@ TypeAliasDecl *ASTContext::getVoidDecl() const {
   return Impl.VoidDecl;
 }
 
-StructDecl *ASTContext::getObjCBoolDecl() const {
-  if (!Impl.ObjCBoolDecl) {
-    SmallVector<ValueDecl *, 1> results;
-    auto *Context = const_cast<ASTContext *>(this);
-    if (ModuleDecl *M = Context->getModuleByName(Id_ObjectiveC.str())) {
-      M->lookupValue({ }, getIdentifier("ObjCBool"), NLKind::UnqualifiedLookup,
-                     results);
-      for (auto result : results) {
-        if (auto structDecl = dyn_cast<StructDecl>(result)) {
-          if (structDecl->getGenericParams() == nullptr) {
-            Impl.ObjCBoolDecl = structDecl;
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  return Impl.ObjCBoolDecl;
-}
-
-ClassDecl *ASTContext::getNSErrorDecl() const {
-  if (!Impl.NSErrorDecl) {
-    if (ModuleDecl *M = getLoadedModule(Id_Foundation)) {
-      // Note: use unqualified lookup so we find NSError regardless of
-      // whether it's defined in the Foundation module or the Clang
-      // Foundation module it imports.
-      UnqualifiedLookup lookup(getIdentifier("NSError"), M, nullptr);
-      if (auto type = lookup.getSingleTypeResult()) {
-        if (auto classDecl = dyn_cast<ClassDecl>(type)) {
-          if (classDecl->getGenericParams() == nullptr) {
-            Impl.NSErrorDecl = classDecl;
-          }
-        }
-      }
-    }
-  }
-
-  return Impl.NSErrorDecl;
-}
-
 ProtocolDecl *ASTContext::getProtocol(KnownProtocolKind kind) const {
   // Check whether we've already looked for and cached this protocol.
   unsigned index = (unsigned)kind;
@@ -686,22 +645,7 @@ ProtocolDecl *ASTContext::getProtocol(KnownProtocolKind kind) const {
   // Find all of the declarations with this name in the appropriate module.
   SmallVector<ValueDecl *, 1> results;
 
-  // _BridgedNSError, _BridgedStoredNSError, and _ErrorCodeProtocol
-  // are in the Foundation module.
-  if (kind == KnownProtocolKind::BridgedNSError ||
-      kind == KnownProtocolKind::BridgedStoredNSError ||
-      kind == KnownProtocolKind::ErrorCodeProtocol) {
-    ModuleDecl *foundation =
-        const_cast<ASTContext *>(this)->getLoadedModule(Id_Foundation);
-    if (!foundation)
-      return nullptr;
-
-    auto identifier = getIdentifier(getProtocolName(kind));
-    foundation->lookupValue({ }, identifier, NLKind::UnqualifiedLookup,
-                            results);
-  } else {
-    lookupInSwiftModule(getProtocolName(kind), results);
-  }
+  lookupInSwiftModule(getProtocolName(kind), results);
 
   for (auto result : results) {
     if (auto protocol = dyn_cast<ProtocolDecl>(result)) {
@@ -1017,7 +961,6 @@ bool ASTContext::hasPointerArgumentIntrinsics(LazyResolver *resolver) const {
     && getUnsafeRawPointerDecl()
     && getUnsafeMutablePointerDecl()
     && getUnsafePointerDecl()
-    && (!LangOpts.EnableObjCInterop || getAutoreleasingUnsafeMutablePointerDecl())
     && getConvertPointerToPointerArgument(resolver)
     && getConvertMutableArrayToPointerArgument(resolver)
     && getConvertConstArrayToPointerArgument(resolver)
@@ -1107,9 +1050,6 @@ void ASTContext::addSearchPath(StringRef searchPath, bool isFramework) {
     SearchPathOpts.FrameworkSearchPaths.push_back(searchPath);
   else
     SearchPathOpts.ImportSearchPaths.push_back(searchPath);
-
-  if (auto *clangLoader = getClangModuleLoader())
-    clangLoader->addSearchPath(searchPath, isFramework);
 }
 
 void ASTContext::addModuleLoader(std::unique_ptr<ModuleLoader> loader,

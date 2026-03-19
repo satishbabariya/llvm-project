@@ -130,17 +130,6 @@ public:
     return CE->getType()->castTo<FunctionType>()->isNoEscape();
   }
 
-  bool isObjC() const {
-    if (auto afd = TheFunction.dyn_cast<AbstractFunctionDecl *>()) {
-      return afd->isObjC();
-    }
-    if (TheFunction.dyn_cast<AbstractClosureExpr *>()) {
-      // Closures are never @objc.
-      return false;
-    }
-    llvm_unreachable("unexpected AnyFunctionRef representation");
-  }
-  
   SourceLoc getLoc() const {
     if (auto afd = TheFunction.dyn_cast<AbstractFunctionDecl *>()) {
       return afd->getLoc();

@@ -555,11 +555,6 @@ public:
   /// an existential metatype.
   bool isAnyExistentialType();
 
-  /// isObjCExistentialType - Determines whether this type is an
-  /// class-bounded existential type whose required conformances are
-  /// all @objc.  Such types are compatible with ObjC.
-  bool isObjCExistentialType();
-  
   /// Determines whether this type is an existential type with a class protocol
   /// bound.
   bool isClassExistentialType();
@@ -748,17 +743,8 @@ public:
   /// unknown-released.
   ///
   /// This predicate covers all types that can be placed into an
-  /// AnyObject without ever requiring a representation change. Note that this
-  /// excludes ObjC class metatypes, which may need to be wrapped or unwrapped
-  /// when converting from native representation to AnyObject representation.
+  /// AnyObject without ever requiring a representation change.
   bool isBridgeableObjectType();
-
-  /// Determine whether this type is a potentially-bridged value type.
-  ///
-  /// This predicate doesn't guarantee that the type is bridged, but rather is
-  /// a quick way to check whether the type is a value type that could
-  /// conceivably be bridged to an Objective-C class type.
-  bool isPotentiallyBridgedValueType();
 
   /// \brief If this is a nominal type or a bound generic nominal type,
   /// returns the (possibly generic) nominal type declaration.
@@ -1952,8 +1938,6 @@ enum class MetatypeRepresentation : char {
   /// Thick metatypes are used for class and existential metatypes,
   /// which permit dynamic behavior.
   Thick,
-  /// An Objective-C metatype refers to an Objective-C class object.
-  ObjC
 };
 
 /// AnyMetatypeType - A common parent class of MetatypeType and
@@ -2239,9 +2223,6 @@ enum class SILFunctionTypeRepresentation : uint8_t {
   /// A Swift instance method.
   Method = FirstSIL,
   
-  /// An Objective-C method.
-  ObjCMethod,
-  
   /// A Swift protocol witness.
   WitnessMethod,
   
@@ -2259,7 +2240,6 @@ inline bool canBeCalledIndirectly(SILFunctionTypeRepresentation rep) {
   case SILFunctionTypeRepresentation::Block:
   case SILFunctionTypeRepresentation::Closure:
     return false;
-  case SILFunctionTypeRepresentation::ObjCMethod:
   case SILFunctionTypeRepresentation::Method:
   case SILFunctionTypeRepresentation::WitnessMethod:
     return true;
@@ -2273,7 +2253,6 @@ inline bool canBeCalledIndirectly(SILFunctionTypeRepresentation rep) {
 inline SILFunctionLanguage
 getSILFunctionLanguage(SILFunctionTypeRepresentation rep) {
   switch (rep) {
-  case SILFunctionTypeRepresentation::ObjCMethod:
   case SILFunctionTypeRepresentation::CFunctionPointer:
   case SILFunctionTypeRepresentation::Block:
     return SILFunctionLanguage::C;

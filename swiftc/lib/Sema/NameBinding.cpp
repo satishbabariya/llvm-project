@@ -21,8 +21,6 @@
 #include "swiftc/AST/ASTWalker.h"
 #include "swiftc/AST/ModuleLoader.h"
 #include "swiftc/Parse/Parser.h"
-#include "swiftc/ClangImporter/ClangModule.h"
-#include "clang/Basic/Module.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/TinyPtrVector.h"
 #include "llvm/ADT/Twine.h"
@@ -74,19 +72,6 @@ NameBinder::getModule(ArrayRef<std::pair<Identifier, SourceLoc>> modulePath) {
       moduleID.first == Context.TheBuiltinModule->getName())
     return Context.TheBuiltinModule;
 
-  // If the imported module name is the same as the current module,
-  // skip the Swift module loader and use the Clang module loader instead.
-  // This allows a Swift module to extend a Clang module of the same name.
-  //
-  // FIXME: We'd like to only use this in SIL mode, but unfortunately we use it
-  // for our fake overlays as well.
-  if (moduleID.first == SF.getParentModule()->getName() &&
-      modulePath.size() == 1) {
-    if (auto importer = Context.getClangModuleLoader())
-      return importer->loadModule(moduleID.second, modulePath);
-    return nullptr;
-  }
-  
   return Context.getModule(modulePath);
 }
 
@@ -139,21 +124,11 @@ static const char *getImportKindString(ImportKind kind) {
   llvm_unreachable("Unhandled ImportKind in switch.");
 }
 
-static bool shouldImportSelfImportClang(const ImportDecl *ID,
-                                        const SourceFile &SF) {
-  // FIXME: We use '@_exported' for fake overlays in testing.
-  if (ID->isExported())
-    return true;
-  if (SF.Kind == SourceFileKind::SIL)
-    return true;
-  return false;
-}
-
 void NameBinder::addImport(
     SmallVectorImpl<std::pair<ImportedModule, ImportOptions>> &imports,
     ImportDecl *ID) {
   if (ID->getModulePath().front().first == SF.getParentModule()->getName() &&
-      ID->getModulePath().size() == 1 && !shouldImportSelfImportClang(ID, SF)) {
+      ID->getModulePath().size() == 1) {
     // If the imported module name is the same as the current module,
     // produce a diagnostic.
     StringRef filename = llvm::sys::path::filename(SF.getFilename());

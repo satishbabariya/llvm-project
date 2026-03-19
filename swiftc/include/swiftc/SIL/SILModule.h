@@ -98,10 +98,6 @@ public:
   const Lowering::TypeLowering &getTypeLowering(SILType t);
 };
 
-namespace Lowering {
-bool usesObjCAllocator(ClassDecl *theClass);
-} // namespace Lowering
-
 } // end swift namespace
 
 #endif // SWIFTC_SIL_SILMODULE_H

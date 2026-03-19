@@ -4791,8 +4791,7 @@ class FuncDecl final : public AbstractFunctionDecl,
                               SourceLoc AccessorKeywordLoc,
                               GenericParamList *GenericParams,
                               unsigned NumParameterLists,
-                              DeclContext *Parent,
-                              ClangNode ClangN);
+                              DeclContext *Parent);
 
 public:
   /// Factory function only for use by deserialization.
@@ -4814,8 +4813,7 @@ public:
                           SourceLoc AccessorKeywordLoc,
                           GenericParamList *GenericParams,
                           ArrayRef<ParameterList *> ParameterLists,
-                          TypeLoc FnRetType, DeclContext *Parent,
-                          ClangNode ClangN = ClangNode());
+                          TypeLoc FnRetType, DeclContext *Parent);
 
   bool isStatic() const {
     return FuncDeclBits.IsStatic;
@@ -5418,8 +5416,6 @@ public:
   /// \code
   /// @objc init(forMemory: ())
   /// \endcode
-  bool isObjCZeroParameterWithLongSelector() const;
-
   static bool classof(const Decl *D) {
     return D->getKind() == DeclKind::Constructor;
   }

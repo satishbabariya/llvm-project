@@ -28,7 +28,6 @@
 #include "swiftc/AST/PrettyStackTrace.h"
 #include "swiftc/Basic/STLExtras.h"
 #include "swiftc/Basic/Timer.h"
-#include "swiftc/ClangImporter/ClangImporter.h"
 #include "swiftc/Parse/Lexer.h"
 #include "swiftc/Sema/IDETypeChecking.h"
 #include "swiftc/Strings.h"
@@ -46,18 +45,10 @@ using namespace swift;
 TypeChecker::TypeChecker(ASTContext &Ctx, DiagnosticEngine &Diags)
   : Context(Ctx), Diags(Diags)
 {
-  auto clangImporter =
-    static_cast<ClangImporter *>(Context.getClangModuleLoader());
-  clangImporter->setTypeResolver(*this);
-
   Context.setLazyResolver(this);
 }
 
 TypeChecker::~TypeChecker() {
-  auto clangImporter =
-    static_cast<ClangImporter *>(Context.getClangModuleLoader());
-  clangImporter->clearTypeResolver();
-
   Context.setLazyResolver(nullptr);
 }
 
