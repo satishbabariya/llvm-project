@@ -214,8 +214,7 @@ BUILTIN_SIL_OPERATION(CastFromNativeObject, "castFromNativeObject", Special)
 ///
 /// regardless of what x is.
 /// x thus must not have any bits set that would change the heap
-/// object pointer value, nor may it have the native/ObjC discriminator bit set,
-/// nor may it have any bits set if the first operand is an ObjC tagged pointer,
+/// object pointer value, nor may it have the discriminator bit set,
 /// or else undefined behavior will ensue.
 BUILTIN_SIL_OPERATION(CastToBridgeObject, "castToBridgeObject", Special)
 
@@ -473,9 +472,6 @@ BUILTIN_MISC_OPERATION(UnsafeGuaranteed, "unsafeGuaranteed", "", Special)
 // unsafeGuaranteedEnd has type (Builtin.Int8) -> ()
 BUILTIN_MISC_OPERATION(UnsafeGuaranteedEnd, "unsafeGuaranteedEnd", "", Special)
 
-// getObjCTypeEncoding has type <T> T.Type -> RawPointer
-BUILTIN_MISC_OPERATION(GetObjCTypeEncoding, "getObjCTypeEncoding", "n", Special)
-
 #undef BUILTIN_MISC_OPERATION
 
 // BUILTIN_TYPE_TRAIT_OPERATION - Compile-time type trait operations.
@@ -485,9 +481,8 @@ BUILTIN_MISC_OPERATION(GetObjCTypeEncoding, "getObjCTypeEncoding", "n", Special)
 #endif
 
 /// canBeClass(T.Type) -> Builtin.Int8
-/// At compile time, evaluate whether T is or can be bound to a class or
-/// @objc protocol type. The answer is a tri-state of 0 = No, 1 = Yes, 2 =
-/// Maybe.
+/// At compile time, evaluate whether T is or can be bound to a class type.
+/// The answer is a tri-state of 0 = No, 1 = Yes, 2 = Maybe.
 BUILTIN_TYPE_TRAIT_OPERATION(CanBeObjCClass, canBeClass)
 
 #undef BUILTIN_TYPE_TRAIT_OPERATION

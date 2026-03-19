@@ -516,8 +516,6 @@ ERROR(sil_too_many_substitutions,none,
       "too many substitutions", ())
 ERROR(sil_dbg_unknown_key,none,
       "unknown key '%0' in debug variable declaration", (StringRef))
-ERROR(sil_objc_with_tail_elements,none,
-      "alloc_ref [objc] cannot have tail allocated elements", ())
 ERROR(found_unqualified_instruction_in_qualified_function,none,
       "found unqualified instruction in qualified function '%0'", (StringRef))
 
@@ -1129,16 +1127,6 @@ ERROR(expr_keypath_expected_rparen,PointsToFirstBadToken,
 ERROR(expr_keypath_compound_name,none,
       "cannot use compound name %0 in '#keyPath' expression", (DeclName))
 
-// Selector expressions.
-ERROR(expr_selector_expected_lparen,PointsToFirstBadToken,
-      "expected '(' following '#selector'", ())
-ERROR(expr_selector_expected_method_expr,PointsToFirstBadToken,
-      "expected expression naming a method within '#selector(...)'", ())
-ERROR(expr_selector_expected_property_expr,PointsToFirstBadToken,
-      "expected expression naming a property within '#selector(...)'", ())
-ERROR(expr_selector_expected_rparen,PointsToFirstBadToken,
-      "expected ')' to complete '#selector' expression", ())
-
 // Type-of expressions.
 ERROR(expr_typeof_expected_label_of,PointsToFirstBadToken,
       "expected argument label 'of:' within 'type(...)'", ())
@@ -1191,9 +1179,6 @@ ERROR(attr_expected_string_literal,none,
 
 ERROR(alignment_must_be_positive_integer,none,
       "alignment value must be a positive integer literal", ())
-
-ERROR(swift_native_objc_runtime_base_must_be_identifier,none,
-      "@_swift_native_objc_runtime_base class name must be an identifier", ())
 
 ERROR(attr_interpolated_string,none,
 "%0 cannot be an interpolated string literal", (StringRef))
@@ -1253,14 +1238,6 @@ ERROR(convention_attribute_expected_name,none,
       "expected convention name identifier in 'convention' attribute", ())
 ERROR(convention_attribute_expected_rparen,none,
       "expected ')' after convention name for 'convention' attribute", ())
-
-// objc
-ERROR(attr_objc_missing_colon,none,
-      "missing ':' after selector piece in @objc attribute", ())
-ERROR(attr_objc_expected_rparen,none,
-      "expected ')' after name for @objc", ())
-ERROR(attr_objc_empty_name,none,
-      "expected name within parentheses of @objc attribute", ())
 
 // opened
 ERROR(opened_attribute_expected_lparen,none,

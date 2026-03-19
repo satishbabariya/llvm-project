@@ -350,10 +350,6 @@ public:
       if (!Mangled.nextIf("_T"))
         return nullptr;
 
-    } else if (Mangled.nextIf("To")) {
-      topLevel->addChild(NodeFactory::create(Node::Kind::ObjCAttribute));
-    } else if (Mangled.nextIf("TO")) {
-      topLevel->addChild(NodeFactory::create(Node::Kind::NonObjCAttribute));
     } else if (Mangled.nextIf("TD")) {
       topLevel->addChild(NodeFactory::create(Node::Kind::DynamicAttribute));
     } else if (Mangled.nextIf("Td")) {
@@ -489,8 +485,6 @@ private:
     // Partial application thunks.
     if (Mangled.nextIf("PA")) {
       Node::Kind kind = Node::Kind::PartialApplyForwarder;
-      if (Mangled.nextIf('o'))
-        kind = Node::Kind::PartialApplyObjCForwarder;
       auto forwarder = NodeFactory::create(kind);
       if (Mangled.nextIf("__T"))
         DEMANGLE_CHILD_OR_RETURN(forwarder, Global);
@@ -1616,10 +1610,6 @@ private:
     if (Mangled.nextIf('T'))
       return NodeFactory::create(Node::Kind::MetatypeRepresentation, "@thick");
 
-    if (Mangled.nextIf('o'))
-      return NodeFactory::create(Node::Kind::MetatypeRepresentation,
-                                 "@objc_metatype");
-
     unreachable("Unhandled metatype representation");
   }
   
@@ -1927,9 +1917,6 @@ private:
     if (c == 'a')
       return demangleDeclarationName(Node::Kind::TypeAlias);
 
-    if (c == 'b') {
-      return demangleFunctionType(Node::Kind::ObjCBlock);
-    }
     if (c == 'c') {
       return demangleFunctionType(Node::Kind::CFunctionPointer);
     }
@@ -2175,7 +2162,6 @@ private:
   // impl-function-attribute ::= 'Cb'            // compatible with C block invocation function
   // impl-function-attribute ::= 'Cc'            // compatible with C global function
   // impl-function-attribute ::= 'Cm'            // compatible with Swift method
-  // impl-function-attribute ::= 'CO'            // compatible with ObjC method
   // impl-function-attribute ::= 'Cw'            // compatible with protocol witness
   // impl-function-attribute ::= 'G'             // generic
   NodePointer demangleImplFunctionType() {
@@ -2191,8 +2177,6 @@ private:
         addImplFunctionAttribute(type, "@convention(c)");
       else if (Mangled.nextIf('m'))
         addImplFunctionAttribute(type, "@convention(method)");
-      else if (Mangled.nextIf('O'))
-        addImplFunctionAttribute(type, "@convention(objc_method)");
       else if (Mangled.nextIf('w'))
         addImplFunctionAttribute(type, "@convention(witness_method)");
       else
@@ -2537,14 +2521,10 @@ private:
     case Node::Kind::NativePinningAddressor:
     case Node::Kind::NativePinningMutableAddressor:
     case Node::Kind::NominalTypeDescriptor:
-    case Node::Kind::NonObjCAttribute:
     case Node::Kind::Number:
-    case Node::Kind::ObjCAttribute:
-    case Node::Kind::ObjCBlock:
     case Node::Kind::OwningAddressor:
     case Node::Kind::OwningMutableAddressor:
     case Node::Kind::PartialApplyForwarder:
-    case Node::Kind::PartialApplyObjCForwarder:
     case Node::Kind::PostfixOperator:
     case Node::Kind::PrefixOperator:
     case Node::Kind::ProtocolConformance:
@@ -3204,12 +3184,6 @@ void NodePrinter::print(NodePointer pointer, bool asContext, bool suppressType) 
     Printer << "inout ";
     print(pointer->getChild(0));
     return;
-  case Node::Kind::NonObjCAttribute:
-    Printer << "@nonobjc ";
-    return;
-  case Node::Kind::ObjCAttribute:
-    Printer << "@objc ";
-    return;
   case Node::Kind::DirectMethodReferenceAttribute:
     Printer << "super ";
     return;
@@ -3392,17 +3366,6 @@ void NodePrinter::print(NodePointer pointer, bool asContext, bool suppressType) 
       print(pointer->getFirstChild());
     }
     return;
-  case Node::Kind::PartialApplyObjCForwarder:
-    if (Options.ShortenPartialApply)
-      Printer << "partial apply";
-    else
-      Printer << "partial apply ObjC forwarder";
-
-    if (pointer->hasChildren()) {
-      Printer << " for ";
-      print(pointer->getFirstChild());
-    }
-    return;
   case Node::Kind::FieldOffset: {
     print(pointer->getChild(0)); // directness
     Printer << "field offset for ";
@@ -3502,11 +3465,6 @@ void NodePrinter::print(NodePointer pointer, bool asContext, bool suppressType) 
     return;
   case Node::Kind::CFunctionPointer: {
     Printer << "@convention(c) ";
-    printFunctionType(pointer);
-    return;
-  }
-  case Node::Kind::ObjCBlock: {
-    Printer << "@convention(block) ";
     printFunctionType(pointer);
     return;
   }

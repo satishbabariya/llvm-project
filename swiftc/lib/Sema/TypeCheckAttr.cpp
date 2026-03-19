@@ -545,114 +545,6 @@ public:
 } // end anonymous namespace
 
 
-static bool checkObjectOrOptionalObjectType(TypeChecker &TC, Decl *D,
-                                            ParamDecl *param) {
-  Type ty = param->getType();
-  if (auto unwrapped = ty->getAnyOptionalObjectType())
-    ty = unwrapped;
-
-  if (auto classDecl = ty->getClassOrBoundGenericClass()) {
-    // @objc class types are okay.
-    if (!classDecl->isObjC()) {
-      TC.diagnose(D, diag::ibaction_nonobjc_class_argument,
-                  param->getType())
-        .highlight(param->getSourceRange());
-      return true;
-    }
-  } else if (ty->isObjCExistentialType() || ty->isAny()) {
-    // @objc existential types are okay, as is Any.
-    // Nothing to do.
-  } else {
-    // No other types are permitted.
-    TC.diagnose(D, diag::ibaction_nonobject_argument,
-                param->getType())
-      .highlight(param->getSourceRange());
-    return true;
-  }
-
-  return false;
-}
-
-static bool isiOS(TypeChecker &TC) {
-  return TC.getLangOpts().Target.isiOS();
-}
-
-static bool iswatchOS(TypeChecker &TC) {
-  return TC.getLangOpts().Target.isWatchOS();
-}
-
-static bool isRelaxedIBAction(TypeChecker &TC) {
-  return isiOS(TC) || iswatchOS(TC);
-}
-
-void AttributeChecker::visitIBActionAttr(IBActionAttr *attr) {
-  // IBActions instance methods must have type Class -> (...) -> ().
-  auto *FD = cast<FuncDecl>(D);
-  Type CurriedTy = FD->getInterfaceType()->castTo<AnyFunctionType>()->getResult();
-  Type ResultTy = CurriedTy->castTo<AnyFunctionType>()->getResult();
-  if (!ResultTy->isEqual(TupleType::getEmpty(TC.Context))) {
-    TC.diagnose(D, diag::invalid_ibaction_result, ResultTy);
-    attr->setInvalid();
-    return;
-  }
-
-  auto paramList = FD->getParameterList(1);
-  bool relaxedIBActionUsedOnOSX = false;
-  bool Valid = true;
-  switch (paramList->size()) {
-  case 0:
-    // (iOS only) No arguments.
-    if (!isRelaxedIBAction(TC)) {
-      relaxedIBActionUsedOnOSX = true;
-      break;
-    }
-    break;
-  case 1:
-    // One argument. May be a scalar on iOS/watchOS (because of WatchKit).
-    if (isRelaxedIBAction(TC)) {
-      // Do a rough check to allow any ObjC-representable struct or enum type
-      // on iOS.
-      Type ty = paramList->get(0)->getType();
-      if (auto nominal = ty->getAnyNominal())
-        if (isa<StructDecl>(nominal) || isa<EnumDecl>(nominal))
-          if (nominal->classifyAsOptionalType() == OTK_None)
-            if (ty->isTriviallyRepresentableIn(ForeignLanguage::ObjectiveC,
-                                               cast<FuncDecl>(D)))
-              break;  // Looks ok.
-    }
-    if (checkObjectOrOptionalObjectType(TC, D, paramList->get(0)))
-      Valid = false;
-    break;
-  case 2:
-    // (iOS/watchOS only) Two arguments, the second of which is a UIEvent.
-    // We don't currently enforce the UIEvent part.
-    if (!isRelaxedIBAction(TC)) {
-      relaxedIBActionUsedOnOSX = true;
-      break;
-    }
-    if (checkObjectOrOptionalObjectType(TC, D, paramList->get(0)))
-      Valid = false;
-    if (checkObjectOrOptionalObjectType(TC, D, paramList->get(1)))
-      Valid = false;
-    break;
-  default:
-    // No platform allows an action signature with more than two arguments.
-    TC.diagnose(D, diag::invalid_ibaction_argument_count,
-                isRelaxedIBAction(TC));
-    Valid = false;
-    break;
-  }
-
-  if (relaxedIBActionUsedOnOSX) {
-    TC.diagnose(D, diag::invalid_ibaction_argument_count,
-                /*relaxedIBAction=*/false);
-    Valid = false;
-  }
-
-  if (!Valid)
-    attr->setInvalid();
-}
-
 /// Get the innermost enclosing declaration for a declaration.
 static Decl *getEnclosingDeclForDecl(Decl *D) {
   // If the declaration is an accessor, treat its storage declaration
@@ -723,43 +615,6 @@ void AttributeChecker::visitCDeclAttr(CDeclAttr *attr) {
   if (attr->Name.empty())
     TC.diagnose(attr->getLocation(),
                 diag::cdecl_empty_name);
-}
-
-void AttributeChecker::visitUnsafeNoObjCTaggedPointerAttr(
-                                          UnsafeNoObjCTaggedPointerAttr *attr) {
-  // Only class protocols can have the attribute.
-  auto proto = dyn_cast<ProtocolDecl>(D);
-  if (!proto) {
-    TC.diagnose(attr->getLocation(),
-                diag::no_objc_tagged_pointer_not_class_protocol);
-    attr->setInvalid();
-  }
-  
-  if (!proto->requiresClass()
-      && !proto->getAttrs().hasAttribute<ObjCAttr>()) {
-    TC.diagnose(attr->getLocation(),
-                diag::no_objc_tagged_pointer_not_class_protocol);
-    attr->setInvalid();    
-  }
-}
-
-void AttributeChecker::visitSwiftNativeObjCRuntimeBaseAttr(
-                                         SwiftNativeObjCRuntimeBaseAttr *attr) {
-  // Only root classes can have the attribute.
-  auto theClass = dyn_cast<ClassDecl>(D);
-  if (!theClass) {
-    TC.diagnose(attr->getLocation(),
-                diag::swift_native_objc_runtime_base_not_on_root_class);
-    attr->setInvalid();
-    return;
-  }
-  
-  if (theClass->hasSuperclass()) {
-    TC.diagnose(attr->getLocation(),
-                diag::swift_native_objc_runtime_base_not_on_root_class);
-    attr->setInvalid();
-    return;
-  }
 }
 
 void AttributeChecker::visitFinalAttr(FinalAttr *attr) {
@@ -855,173 +710,6 @@ void AttributeChecker::checkOperatorAttribute(DeclAttribute *attr) {
   }
 }
 
-void AttributeChecker::visitNSCopyingAttr(NSCopyingAttr *attr) {
-  // The @NSCopying attribute is only allowed on stored properties.
-  auto *VD = cast<VarDecl>(D);
-
-  // It may only be used on class members.
-  auto classDecl = D->getDeclContext()->getAsClassOrClassExtensionContext();
-  if (!classDecl) {
-    TC.diagnose(attr->getLocation(), diag::nscopying_only_on_class_properties);
-    attr->setInvalid();
-    return;
-  }
-
-  if (!VD->isSettable(VD->getDeclContext())) {
-    TC.diagnose(attr->getLocation(), diag::nscopying_only_mutable);
-    attr->setInvalid();
-    return;
-  }
-
-  if (!VD->hasStorage()) {
-    TC.diagnose(attr->getLocation(), diag::nscopying_only_stored_property);
-    attr->setInvalid();
-    return;
-  }
-
-  assert(VD->getOverriddenDecl() == nullptr &&
-         "Can't have value with storage that is an override");
-
-  // Check the type.  It must be must be [unchecked]optional, weak, a normal
-  // class, AnyObject, or classbound protocol.
-  // must conform to the NSCopying protocol.
-  
-}
-
-void AttributeChecker::checkApplicationMainAttribute(DeclAttribute *attr,
-                                             Identifier Id_ApplicationDelegate,
-                                             Identifier Id_Kit,
-                                             Identifier Id_ApplicationMain) {
-  // %select indexes for ApplicationMain diagnostics.
-  enum : unsigned {
-    UIApplicationMainClass,
-    NSApplicationMainClass,
-  };
-  
-  unsigned applicationMainKind;
-  if (isa<UIApplicationMainAttr>(attr))
-    applicationMainKind = UIApplicationMainClass;
-  else if (isa<NSApplicationMainAttr>(attr))
-    applicationMainKind = NSApplicationMainClass;
-  else
-    llvm_unreachable("not an ApplicationMain attr");
-  
-  auto *CD = dyn_cast<ClassDecl>(D);
-  
-  // The applicant not being a class should have been diagnosed by the early
-  // checker.
-  if (!CD) return;
-
-  // The class cannot be generic.
-  if (CD->isGenericContext()) {
-    TC.diagnose(attr->getLocation(),
-                diag::attr_generic_ApplicationMain_not_supported,
-                applicationMainKind);
-    attr->setInvalid();
-    return;
-  }
-  
-  // @XXApplicationMain classes must conform to the XXApplicationDelegate
-  // protocol.
-  auto &C = D->getASTContext();
-
-  auto KitModule = C.getLoadedModule(Id_Kit);
-  ProtocolDecl *ApplicationDelegateProto = nullptr;
-  if (KitModule) {
-    auto lookupOptions = defaultUnqualifiedLookupOptions;
-    lookupOptions |= NameLookupFlags::KnownPrivate;
-
-    auto lookup = TC.lookupUnqualifiedType(KitModule, Id_ApplicationDelegate,
-                                           SourceLoc(),
-                                           lookupOptions);
-    if (lookup.size() == 1)
-      ApplicationDelegateProto = dyn_cast<ProtocolDecl>(lookup[0]);
-  }
-
-  if (!ApplicationDelegateProto ||
-      !TC.conformsToProtocol(CD->getDeclaredType(), ApplicationDelegateProto,
-                             CD, None)) {
-    TC.diagnose(attr->getLocation(),
-                diag::attr_ApplicationMain_not_ApplicationDelegate,
-                applicationMainKind);
-    attr->setInvalid();
-  }
-
-  if (attr->isInvalid())
-    return;
-  
-  // Register the class as the main class in the module. If there are multiples
-  // they will be diagnosed.
-  auto *SF = cast<SourceFile>(CD->getModuleScopeContext());
-  if (SF->registerMainClass(CD, attr->getLocation()))
-    attr->setInvalid();
-  
-  // Check that we have the needed symbols in the frameworks.
-  auto lookupOptions = defaultUnqualifiedLookupOptions;
-  lookupOptions |= NameLookupFlags::KnownPrivate;
-  auto lookupMain = TC.lookupUnqualified(KitModule, Id_ApplicationMain,
-                                         SourceLoc(), lookupOptions);
-
-  for (const auto &result : lookupMain) {
-    TC.validateDecl(result.Decl);
-  }
-  auto Foundation = TC.Context.getLoadedModule(C.Id_Foundation);
-  if (Foundation) {
-    auto lookupString = TC.lookupUnqualified(
-                          Foundation,
-                          C.getIdentifier("NSStringFromClass"),
-                          SourceLoc(),
-                          lookupOptions);
-    for (const auto &result : lookupString) {
-      TC.validateDecl(result.Decl);
-    }
-  }
-}
-
-void AttributeChecker::visitNSApplicationMainAttr(NSApplicationMainAttr *attr) {
-  auto &C = D->getASTContext();
-  checkApplicationMainAttribute(attr,
-                                C.getIdentifier("NSApplicationDelegate"),
-                                C.getIdentifier("AppKit"),
-                                C.getIdentifier("NSApplicationMain"));
-}
-void AttributeChecker::visitUIApplicationMainAttr(UIApplicationMainAttr *attr) {
-  auto &C = D->getASTContext();
-  checkApplicationMainAttribute(attr,
-                                C.getIdentifier("UIApplicationDelegate"),
-                                C.getIdentifier("UIKit"),
-                                C.getIdentifier("UIApplicationMain"));
-}
-
-/// Determine whether the given context is an extension to an Objective-C class
-/// where the class is defined in the Objective-C module and the extension is
-/// defined within its module.
-static bool isObjCClassExtensionInOverlay(DeclContext *dc) {
-  // Check whether we have an extension.
-  auto ext = dyn_cast<ExtensionDecl>(dc);
-  if (!ext)
-    return false;
-
-  // Find the extended class.
-  auto classDecl = ext->getExtendedType()->getClassOrBoundGenericClass();
-  if (!classDecl)
-    return false;
-
-  // The class must be defined in Objective-C.
-  if (!classDecl->hasClangNode())
-    return false;
-
-  // Find the Clang module unit that stores the class.
-  auto classModuleUnit
-    = dyn_cast<ClangModuleUnit>(classDecl->getModuleScopeContext());
-  if (!classModuleUnit)
-    return false;
-
-  // Check whether the extension is in the overlay.
-  auto extModule = ext->getDeclContext()->getParentModule();
-  return extModule == classModuleUnit->getAdapterModule();
-}
-
 void AttributeChecker::visitRequiredAttr(RequiredAttr *attr) {
   // The required attribute only applies to constructors.
   auto ctor = cast<ConstructorDecl>(D);
@@ -1035,10 +723,7 @@ void AttributeChecker::visitRequiredAttr(RequiredAttr *attr) {
   // Only classes can have required constructors.
   if (parentTy->getClassOrBoundGenericClass()) {
     // The constructor must be declared within the class itself.
-    // FIXME: Allow an SDK overlay to add a required initializer to a class
-    // defined in Objective-C
-    if (!isa<ClassDecl>(ctor->getDeclContext()) &&
-        !isObjCClassExtensionInOverlay(ctor->getDeclContext())) {
+    if (!isa<ClassDecl>(ctor->getDeclContext())) {
       TC.diagnose(ctor, diag::required_initializer_in_extension, parentTy)
         .highlight(attr->getLocation());
       attr->setInvalid();
@@ -1481,12 +1166,6 @@ void TypeChecker::checkOwnershipAttr(VarDecl *var, OwnershipAttr *attr) {
     else if (type->allowsOwnership()) {
       // Use this special diagnostic if it's actually a reference type but just
       // isn't Optional.
-      if (var->getAttrs().hasAttribute<IBOutletAttr>()) {
-        // Let @IBOutlet complain about this; it's more specific.
-        attr->setInvalid();
-        return;
-      }
-
       diagnose(var->getStartLoc(), diag::invalid_weak_ownership_not_optional,
                OptionalType::get(type));
       attr->setInvalid();

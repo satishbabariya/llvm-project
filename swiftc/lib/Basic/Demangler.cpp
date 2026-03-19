@@ -92,13 +92,10 @@ static bool isFunctionAttr(Node::Kind kind) {
     case Node::Kind::GenericSpecializationNotReAbstracted:
     case Node::Kind::GenericPartialSpecialization:
     case Node::Kind::GenericPartialSpecializationNotReAbstracted:
-    case Node::Kind::ObjCAttribute:
-    case Node::Kind::NonObjCAttribute:
     case Node::Kind::DynamicAttribute:
     case Node::Kind::DirectMethodReferenceAttribute:
     case Node::Kind::VTableAttribute:
     case Node::Kind::PartialApplyForwarder:
-    case Node::Kind::PartialApplyObjCForwarder:
       return true;
     default:
       return false;
@@ -133,8 +130,7 @@ NodePointer Demangler::demangleTopLevel() {
   NodePointer Parent = topLevel;
   while (NodePointer FuncAttr = popNode(isFunctionAttr)) {
     Parent->addChild(FuncAttr);
-    if (FuncAttr->getKind() == Node::Kind::PartialApplyForwarder ||
-        FuncAttr->getKind() == Node::Kind::PartialApplyObjCForwarder)
+    if (FuncAttr->getKind() == Node::Kind::PartialApplyForwarder)
       Parent = FuncAttr;
   }
   for (const NodeWithPos &NWP : NodeStack) {

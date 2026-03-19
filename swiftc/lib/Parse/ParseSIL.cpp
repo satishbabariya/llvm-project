@@ -2084,18 +2084,6 @@ bool SILParser::parseSILInstruction(SILBasicBlock *BB, SILBuilder &B) {
     case ValueKind::ThinToThickFunctionInst:
       ResultVal = B.createThinToThickFunction(InstLoc, Val, Ty);
       break;
-    case ValueKind::ThickToObjCMetatypeInst:
-      ResultVal = B.createThickToObjCMetatype(InstLoc, Val, Ty);
-      break;
-    case ValueKind::ObjCToThickMetatypeInst:
-      ResultVal = B.createObjCToThickMetatype(InstLoc, Val, Ty);
-      break;
-    case ValueKind::ObjCMetatypeToObjectInst:
-      ResultVal = B.createObjCMetatypeToObject(InstLoc, Val, Ty);
-      break;
-    case ValueKind::ObjCExistentialMetatypeToObjectInst:
-      ResultVal = B.createObjCExistentialMetatypeToObject(InstLoc, Val, Ty);
-      break;
     }
     break;
   }
@@ -2527,7 +2515,6 @@ bool SILParser::parseSILInstruction(SILBasicBlock *BB, SILBuilder &B) {
   }
   case ValueKind::AllocRefInst:
   case ValueKind::AllocRefDynamicInst: {
-    bool IsObjC = false;
     bool OnStack = false;
     SmallVector<SILType, 2> ElementTypes;
     SmallVector<SILValue, 2> ElementCounts;
@@ -2536,9 +2523,7 @@ bool SILParser::parseSILInstruction(SILBasicBlock *BB, SILBuilder &B) {
       Identifier Id;
       parseSILIdentifier(Id, diag::expected_in_attribute_list);
       StringRef Optional = Id.str();
-      if (Optional == "objc") {
-        IsObjC = true;
-      } else if (Optional == "stack") {
+      if (Optional == "stack") {
         OnStack = true;
       } else if (Optional == "tail_elems") {
         SILType ElemTy;
@@ -2573,18 +2558,14 @@ bool SILParser::parseSILInstruction(SILBasicBlock *BB, SILBuilder &B) {
     if (parseSILDebugLocation(InstLoc, B))
       return true;
 
-    if (IsObjC && ElementTypes.size() != 0) {
-      P.diagnose(P.Tok, diag::sil_objc_with_tail_elements);
-      return true;
-    }
     if (Opcode == ValueKind::AllocRefDynamicInst) {
       if (OnStack)
         return true;
 
       ResultVal = B.createAllocRefDynamic(InstLoc, Metadata, ObjectType,
-                                          IsObjC, ElementTypes, ElementCounts);
+                                          /*IsObjC=*/false, ElementTypes, ElementCounts);
     } else {
-      ResultVal = B.createAllocRef(InstLoc, ObjectType, IsObjC, OnStack,
+      ResultVal = B.createAllocRef(InstLoc, ObjectType, /*IsObjC=*/false, OnStack,
                                    ElementTypes, ElementCounts);
     }
     break;
@@ -3191,28 +3172,6 @@ bool SILParser::parseSILInstruction(SILBasicBlock *BB, SILBuilder &B) {
         parseSILDebugLocation(InstLoc, B))
       return true;
     ResultVal = B.createIndexRawPointer(InstLoc, Val, IndexVal);
-    break;
-  }
-  case ValueKind::ObjCProtocolInst: {
-    Identifier ProtocolName;
-    SILType Ty;
-    if (P.parseToken(tok::pound, diag::expected_sil_constant) ||
-        parseSILIdentifier(ProtocolName, diag::expected_sil_constant) ||
-        P.parseToken(tok::colon, diag::expected_tok_in_sil_instr, ":") ||
-        parseSILType(Ty) ||
-        parseSILDebugLocation(InstLoc, B))
-      return true;
-    // Find the decl for the protocol name.
-    ValueDecl *VD;
-    SmallVector<ValueDecl*, 4> CurModuleResults;
-    // Perform a module level lookup on the first component of the
-    // fully-qualified name.
-    P.SF.getParentModule()->lookupValue(ModuleDecl::AccessPathTy(), ProtocolName,
-                                        NLKind::UnqualifiedLookup,
-                                        CurModuleResults);
-    assert(CurModuleResults.size() == 1);
-    VD = CurModuleResults[0];
-    ResultVal = B.createObjCProtocol(InstLoc, cast<ProtocolDecl>(VD), Ty);
     break;
   }
   case ValueKind::AllocGlobalInst: {
@@ -4010,12 +3969,11 @@ bool Parser::parseDeclSIL() {
   Inline_t inlineStrategy = InlineDefault;
   SmallVector<std::string, 1> Semantics;
   SmallVector<ParsedSpecAttr, 4> SpecAttrs;
-  ValueDecl *ClangDecl = nullptr;
   EffectsKind MRK = EffectsKind::Unspecified;
   if (parseSILLinkage(FnLinkage, *this) ||
       parseDeclSILOptional(&isTransparent, &isFragile, &isThunk, &isGlobalInit,
                            &inlineStrategy, nullptr, &Semantics, &SpecAttrs,
-                           &ClangDecl, &MRK, FunctionState) ||
+                           &MRK, FunctionState) ||
       parseToken(tok::at_sign, diag::expected_sil_function_name) ||
       parseIdentifier(FnName, FnNameLoc, diag::expected_sil_function_name) ||
       parseToken(tok::colon, diag::expected_sil_type))
@@ -4042,8 +4000,6 @@ bool Parser::parseDeclSIL() {
     FunctionState.F->setGlobalInit(isGlobalInit);
     FunctionState.F->setInlineStrategy(inlineStrategy);
     FunctionState.F->setEffectsKind(MRK);
-    if (ClangDecl)
-      FunctionState.F->setClangNodeOwner(ClangDecl);
     for (auto &Attr : Semantics) {
       FunctionState.F->addSemanticsAttr(Attr);
     }
@@ -4171,7 +4127,7 @@ bool Parser::parseSILGlobal() {
   SILParser State(*this);
   if (parseSILLinkage(GlobalLinkage, *this) ||
       parseDeclSILOptional(nullptr, &isFragile, nullptr, nullptr,
-                           nullptr, &isLet, nullptr, nullptr, nullptr,
+                           nullptr, &isLet, nullptr, nullptr,
                            nullptr, State) ||
       parseToken(tok::at_sign, diag::expected_sil_value_name) ||
       parseIdentifier(GlobalName, NameLoc, diag::expected_sil_value_name) ||
@@ -4492,7 +4448,7 @@ bool Parser::parseSILWitnessTable() {
   
   bool isFragile = false;
   if (parseDeclSILOptional(nullptr, &isFragile, nullptr, nullptr,
-                           nullptr, nullptr, nullptr, nullptr, nullptr,
+                           nullptr, nullptr, nullptr, nullptr,
                            nullptr, WitnessState))
     return true;
 

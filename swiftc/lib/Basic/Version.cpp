@@ -14,7 +14,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Basic/CharInfo.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/ADT/SmallString.h"
 #include "swiftc/AST/DiagnosticsParse.h"
@@ -44,13 +43,12 @@
 #endif
 
 #include "LLVMRevision.inc"
-#include "ClangRevision.inc"
 #include "SwiftRevision.inc"
 
 namespace swift {
 namespace version {
 
-/// Print a string of the form "LLVM xxxxx, Clang yyyyy, Swift zzzzz",
+/// Print a string of the form "LLVM xxxxx, Swift zzzzz",
 /// where each placeholder is the revision for the associated repository.
 static void printFullRevisionString(raw_ostream &out) {
   // Arbitrarily truncate to 10 characters. This should be enough to unique
@@ -58,13 +56,6 @@ static void printFullRevisionString(raw_ostream &out) {
   // while keeping the version string from being ridiculously long.
 #if defined(LLVM_REVISION)
   out << "LLVM " << StringRef(LLVM_REVISION).slice(0, 10);
-# if defined(CLANG_REVISION) || defined(SWIFT_REVISION)
-  out << ", ";
-# endif
-#endif
-
-#if defined(CLANG_REVISION)
-  out << "Clang " << StringRef(CLANG_REVISION).slice(0, 10);
 # if defined(SWIFT_REVISION)
   out << ", ";
 # endif
@@ -277,31 +268,6 @@ Version::preprocessorDefinition(StringRef macroName,
   llvm::raw_string_ostream(define) << macroName << '=' << versionConstant;
   // This isn't using stream.str() so that we get move semantics.
   return define;
-}
-
-Version::operator clang::VersionTuple() const
-{
-  switch (Components.size()) {
- case 0:
-   return clang::VersionTuple();
- case 1:
-   return clang::VersionTuple((unsigned)Components[0]);
- case 2:
-   return clang::VersionTuple((unsigned)Components[0],
-                              (unsigned)Components[1]);
- case 3:
-   return clang::VersionTuple((unsigned)Components[0],
-                              (unsigned)Components[1],
-                              (unsigned)Components[2]);
- case 4:
- case 5:
-   return clang::VersionTuple((unsigned)Components[0],
-                              (unsigned)Components[1],
-                              (unsigned)Components[2],
-                              (unsigned)Components[3]);
- default:
-   llvm_unreachable("swift::version::Version with 6 or more components");
-  }
 }
 
 bool Version::isValidEffectiveLanguageVersion() const {

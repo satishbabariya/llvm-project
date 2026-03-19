@@ -671,9 +671,6 @@ ERROR(super_initializer_not_in_initializer,none,
 
 WARNING(isa_is_always_true,none, "'%0' test is always true",
         (StringRef))
-WARNING(isa_is_foreign_check,none,
-      "'is' test is always true because %0 is a Core Foundation type",
-      (Type))
 WARNING(conditional_downcast_coercion,none,
       "conditional cast from %0 to %1 always succeeds",
       (Type, Type))
@@ -1848,60 +1845,16 @@ ERROR(escaping_non_function_parameter,none,
 NOTE(escaping_optional_type_argument, none,
      "closure is already escaping in optional type argument", ())
 
-// NSManaged attribute
-ERROR(attr_NSManaged_not_instance_member,none,
-      "@NSManaged only allowed on an instance property or method", ())
-ERROR(attr_NSManaged_not_stored,none,
-      "@NSManaged not allowed on %select{computed|observing|addressed}0 "
-      "properties", (unsigned))
-ERROR(attr_NSManaged_let_property,none,
-      "@NSManaged not allowed on a 'let' property", ())
-ERROR(attr_NSManaged_initial_value,none,
-      "@NSManaged property cannot have an initial value", ())
-ERROR(attr_NSManaged_NSCopying,none,
-      "@NSManaged property cannot also be marked @NSCopying", ())
-ERROR(attr_NSManaged_method_body,none,
-      "@NSManaged method cannot have a body; it must be provided at runtime",())
-
-
-// NSCopying attribute
-ERROR(nscopying_only_on_class_properties,none,
-      "@NSCopying may only be used on properties in classes",
-      ())
-ERROR(nscopying_only_mutable,none,
-      "@NSCopying requires property to be mutable", ())
-ERROR(nscopying_only_stored_property,none,
-      "@NSCopying is only valid on stored properties", ())
-ERROR(nscopying_doesnt_conform,none,
-      "@NSCopying is only valid with types that conform to"
-      " the NSCopying protocol", ())
-
-// UIApplicationMain/NSApplicationMain attribute
-#define SELECT_APPLICATION_MAIN "select{'UIApplicationMain'|'NSApplicationMain'}"
-#define SELECT_APPLICATION_DELEGATE "select{'UIApplicationDelegate'|'NSApplicationDelegate'}"
-
-ERROR(attr_ApplicationMain_not_class,none,
-      "%" SELECT_APPLICATION_MAIN "0 attribute may only be used on classes",
-      (unsigned))
-ERROR(attr_ApplicationMain_not_ApplicationDelegate,none,
-      "%" SELECT_APPLICATION_MAIN "0 class must conform to the %" SELECT_APPLICATION_DELEGATE "0 protocol",
-      (unsigned))
-ERROR(attr_generic_ApplicationMain_not_supported,none,
-      "generic %" SELECT_APPLICATION_MAIN "0 classes are not supported",
-      (unsigned))
 ERROR(attr_ApplicationMain_multiple,none,
-      "%" SELECT_APPLICATION_MAIN "0 attribute can only apply to one class in a module",
+      "application main attribute can only apply to one class in a module",
       (unsigned))
 ERROR(attr_ApplicationMain_with_script,none,
-      "%" SELECT_APPLICATION_MAIN "0 attribute cannot be used in a module that contains "
+      "application main attribute cannot be used in a module that contains "
       "top-level code",
       (unsigned))
 NOTE(attr_ApplicationMain_script_here,none,
      "top-level code defined in this source file",
      ())
-
-#undef SELECT_APPLICATION_MAIN
-#undef SELECT_APPLICATION_DELEGATE
 
 // lazy
 ERROR(lazy_not_on_let,none,
@@ -2065,9 +2018,6 @@ NOTE(forced_to_conditional_downcast,none,
 NOTE(silence_inject_forced_downcast,none,
      "add parentheses around the cast to silence this warning", ())
 
-ERROR(conditional_downcast_foreign,none,
-      "conditional downcast to CoreFoundation type %0 will always succeed",
-      (Type))
 
 ERROR(optional_used_as_boolean,none,
      "optional type %0 cannot be used as a boolean; "
@@ -2435,8 +2385,6 @@ WARNING(expression_unused_init_result,none,
         "result of %0 initializer is unused", (Type))
 WARNING(expression_unused_optional_try,none,
         "result of 'try?' is unused", ())
-WARNING(expression_unused_selector_result, none,
-        "result of '#selector' is unused", ())
 WARNING(expression_unused_literal,none,
         "%0 literal is unused", (StringRef))
 
@@ -2762,263 +2710,8 @@ ERROR(sil_metatype_multiple_reprs,none,
       "metatypes in SIL can only be one of @thin, @thick, or @objc_metatype",
       ())
 
-//------------------------------------------------------------------------------
-// @objc and @nonobjc
-//------------------------------------------------------------------------------
-
-ERROR(attr_used_without_required_module, none,
-      "%0 attribute used without importing module %1",
-      (DeclAttribute, Identifier))
-
-ERROR(invalid_objc_decl_context,none,
-      "@objc can only be used with members of classes, @objc protocols, and "
-      "concrete extensions of classes", ())
-ERROR(invalid_objc_decl,none,
-      "only classes, protocols, methods, initializers, properties, and "
-      "subscript declarations can be declared @objc", ())
-ERROR(invalid_objc_swift_rooted_class,none,
-      "only classes that inherit from NSObject can be declared @objc", ())
-ERROR(invalid_nonobjc_decl,none,
-      "only methods, initializers, properties and subscript declarations can "
-      "be declared @nonobjc", ())
-ERROR(objc_in_extension_context,none,
-      "members of constrained extensions cannot be declared @objc", ())
-ERROR(objc_in_generic_extension,none,
-      "@objc is not supported within extensions of generic classes", ())
-ERROR(objc_operator, none,
-      "operator methods cannot be declared @objc", ())
-ERROR(objc_operator_proto, none,
-      "@objc protocols may not have operator requirements", ())
-
-ERROR(objc_for_generic_class,none,
-      "generic subclasses of '@objc' classes cannot have an explicit '@objc' "
-      "attribute because they are not directly visible from Objective-C", ())
-ERROR(objc_getter_for_nonobjc_property,none,
-      "'@objc' getter for non-'@objc' property", ())
-ERROR(objc_getter_for_nonobjc_subscript,none,
-      "'@objc' getter for non-'@objc' subscript", ())
-ERROR(objc_setter_for_nonobjc_property,none,
-      "'@objc' setter for non-'@objc' property", ())
-ERROR(objc_setter_for_nonobjc_subscript,none,
-      "'@objc' setter for non-'@objc' subscript", ())
-ERROR(objc_enum_generic,none,
-      "'@objc' enum cannot be generic", ())
-ERROR(objc_name_req_nullary,none,
-      "'@objc' %select{class|protocol|enum|enum case|property}0 must have a simple name", (int))
-ERROR(objc_name_subscript,none,
-      "'@objc' subscript cannot have a name; did you mean to put "
-      "the name on the getter or setter?", ())
-ERROR(objc_name_func_mismatch,none,
-      "'@objc' %select{initializer|method}0 name provides "
-      "%select{one argument name|names for %1 arguments}2, but "
-      "%select{initializer|method}0 has %select{one parameter|%3 parameters}4"
-      "%select{| (%select{|including }4the error parameter)}5",
-      (bool, unsigned, bool, unsigned, bool, bool))
-ERROR(objc_enum_case_req_name,none,
-      "attribute has no effect; cases within an '@objc' enum are already "
-      "exposed to Objective-C", ())
-ERROR(objc_enum_case_req_objc_enum,none,
-      "'@objc' enum case is not allowed outside of an '@objc' enum", ())
-ERROR(objc_enum_case_multi,none,
-      "'@objc' enum case declaration defines multiple enum cases with the same Objective-C name", ())
-
-// If you change this, also change enum ObjCReason
-#define OBJC_ATTR_SELECT "select{marked @_cdecl|marked dynamic|marked @objc|marked @IBOutlet|marked @IBAction|marked @NSManaged|a member of an @objc protocol|implicitly @objc|an @objc override|an implementation of an @objc requirement}"
-
-ERROR(objc_invalid_on_var,none,
-      "property cannot be %" OBJC_ATTR_SELECT "0 "
-      "because its type cannot be represented in Objective-C", (unsigned))
-ERROR(objc_invalid_subscript_key_type,none,
-      "subscript cannot be %" OBJC_ATTR_SELECT "0 because its key "
-      "type %1 is neither an integer nor an object", (unsigned, Type))
-ERROR(objc_invalid_on_subscript,none,
-      "subscript cannot be %" OBJC_ATTR_SELECT "0 because its type "
-      "cannot be represented in Objective-C", (unsigned))
-ERROR(objc_invalid_with_generic_params,none,
-      "method cannot be %" OBJC_ATTR_SELECT "0 because it has generic "
-      "parameters", (unsigned))
-ERROR(objc_convention_invalid,none,
-      "%0 is not representable in Objective-C, so it cannot be used"
-      " with '@convention(%1)'", (Type, StringRef))
 ERROR(function_type_no_parens,none,
       "single argument function types require parentheses", ())
-NOTE(not_objc_empty_protocol_composition,none,
-     "'Any' is not considered '@objc'; use 'AnyObject' instead", ())
-NOTE(not_objc_protocol,none,
-     "protocol %0 is not '@objc'", (Type))
-NOTE(not_objc_error_protocol_composition,none,
-     "protocol composition involving 'Error' cannot be represented "
-     "in Objective-C", ())
-NOTE(not_objc_empty_tuple,none,
-      "empty tuple type cannot be represented in Objective-C", ())
-NOTE(not_objc_tuple,none,
-      "tuples cannot be represented in Objective-C", ())
-NOTE(not_objc_swift_class,none,
-     "classes not annotated with @objc cannot be represented "
-     "in Objective-C", ())
-NOTE(not_objc_swift_struct,none,
-      "Swift structs cannot be represented in Objective-C", ())
-NOTE(not_objc_swift_enum,none,
-      "non-'@objc' enums cannot be represented in Objective-C", ())
-NOTE(not_objc_generic_type_param,none,
-     "generic type parameters cannot be represented in Objective-C", ())
-NOTE(not_objc_function_type_param,none,
-     "function types cannot be represented in Objective-C unless their "
-     "parameters and returns can be", ())
-NOTE(not_objc_function_type_throwing,none,
-      "throwing function types cannot be represented in Objective-C", ())
-NOTE(objc_inferring_on_objc_protocol_member,none,
-     "inferring '@objc' because the declaration is a member of "
-     "an '@objc' protocol", ())
-NOTE(objc_overriding_objc_decl,none,
-     "overriding '@objc' %select{property|subscript|initializer|method}0 %1 "
-     "here", (unsigned, DeclName))
-NOTE(objc_witness_objc_requirement,none,
-     "satisfying requirement for %0 %1 in protocol %2",
-     (DescriptiveDeclKind, DeclName, DeclName))
-
-ERROR(objc_invalid_on_func_curried,none,
-      "method cannot be %" OBJC_ATTR_SELECT "0 because curried functions "
-      "cannot be represented in Objective-C", (unsigned))
-ERROR(objc_observing_accessor, none,
-      "observing accessors are not allowed to be marked @objc", ())
-ERROR(objc_invalid_on_func_variadic,none,
-      "method cannot be %" OBJC_ATTR_SELECT "0 because it has a variadic "
-      "parameter", (unsigned))
-ERROR(objc_invalid_on_func_param_type,none,
-      "method cannot be %" OBJC_ATTR_SELECT "1 because the type of the "
-      "parameter %0 cannot be represented in Objective-C", (unsigned, unsigned))
-ERROR(objc_invalid_on_func_single_param_type,none,
-      "method cannot be %" OBJC_ATTR_SELECT "0 because the type of the "
-      "parameter cannot be represented in Objective-C", (unsigned))
-ERROR(objc_invalid_on_func_result_type,none,
-      "method cannot be %" OBJC_ATTR_SELECT "0 because its result type "
-      "cannot be represented in Objective-C", (unsigned))
-ERROR(objc_invalid_on_foreign_class,none,
-      "method cannot be %" OBJC_ATTR_SELECT "0 because Core Foundation "
-      "types are not classes in Objective-C", (unsigned))
-ERROR(objc_invalid_on_throwing_optional_result,none,
-      "throwing method cannot be %" OBJC_ATTR_SELECT "0 because "
-      "it returns a value of optional type %1; 'nil' indicates failure to "
-      "Objective-C",
-      (unsigned, Type))
-ERROR(objc_invalid_on_throwing_result,none,
-      "throwing method cannot be %" OBJC_ATTR_SELECT "0 because "
-      "it returns a value of type %1; return 'Void' or a type that bridges "
-      "to an Objective-C class",
-      (unsigned, Type))
-ERROR(objc_invalid_on_failing_init,none,
-      "a failable and throwing initializer cannot be "
-      "%" OBJC_ATTR_SELECT "0 because 'nil' indicates failure to Objective-C",
-      (unsigned))
-
-ERROR(objc_in_objc_runtime_visible,none,
-      "%0 cannot be %" OBJC_ATTR_SELECT "1 because class %2 is only visible "
-      "via the Objective-C runtime",
-      (DescriptiveDeclKind, unsigned, Identifier))
-
-ERROR(objc_override_method_selector_mismatch,none,
-      "Objective-C method has a different selector from the "
-      "method it overrides (%0 vs. %1)", (ObjCSelector, ObjCSelector))
-
-ERROR(objc_override_property_name_mismatch,none,
-      "Objective-C property has a different name from the "
-      "property it overrides (%0 vs. %1)", (Identifier, Identifier))
-
-ERROR(objc_ambiguous_inference,none,
-      "ambiguous inference of Objective-C name for %0 %1 (%2 vs %3)",
-      (DescriptiveDeclKind, DeclName, ObjCSelector, ObjCSelector))
-NOTE(objc_ambiguous_inference_candidate,none,
-     "%0 (in protocol %1) provides Objective-C name %2",
-     (DeclName, DeclName, ObjCSelector))
-
-ERROR(nonlocal_bridged_to_objc,none,
-      "conformance of %0 to %1 can only be written in module %2",
-      (Identifier, Identifier, Identifier))
-
-ERROR(broken_bridged_to_objc_protocol,none,
-      "_BridgedToObjectiveC protocol is broken", ())
-
-ERROR(missing_bridging_function,Fatal,
-      "missing '%select{_forceBridgeFromObjectiveC|"
-      "_conditionallyBridgeFromObjectiveC}0'", (bool))
-ERROR(missing_nserror_bridging_function,none,
-      "missing _bridgeNSError", ())
-
-#define OBJC_DIAG_SELECT "%select{initializer %1|implicit initializer %1|deinitializer|implicit deinitializer|method %1|getter for %1|subscript getter|setter for %1|subscript setter}0"
-
-#define OBJC_DIAG_SELECT_2 "%select{initializer %3|implicit initializer %3|deinitializer|implicit deinitializer|method %3|getter for %3|subscript getter|setter for %3|subscript setter}2"
-
-ERROR(objc_redecl,none,
-      OBJC_DIAG_SELECT " with Objective-C selector %4 conflicts with "
-      OBJC_DIAG_SELECT_2 " with the same Objective-C selector",
-      (unsigned, DeclName, unsigned, DeclName, ObjCSelector))
-NOTE(objc_declared_here,none,
-     OBJC_DIAG_SELECT " declared here",
-     (unsigned, DeclName))
-
-ERROR(objc_redecl_same,none,
-      OBJC_DIAG_SELECT " with Objective-C selector %2 conflicts with "
-      "previous declaration with the same Objective-C selector",
-      (unsigned, DeclName, ObjCSelector))
-
-ERROR(objc_override_other,none,
-      OBJC_DIAG_SELECT " with Objective-C selector %4 conflicts with "
-      OBJC_DIAG_SELECT_2 " from superclass %5 with the same Objective-C "
-      "selector",
-      (unsigned, DeclName, unsigned, DeclName, ObjCSelector, Type))
-
-ERROR(objc_class_method_not_permitted,none,
-      OBJC_DIAG_SELECT " defines Objective-C class method %2, which is "
-      "not permitted by Swift", (unsigned, DeclName, ObjCSelector))
-
-WARNING(objc_class_method_not_permitted_swift3_compat_warning,none,
-      OBJC_DIAG_SELECT " defines Objective-C class method %2, which is "
-      "not guaranteed to be invoked by Swift and will be disallowed in future "
-      "versions", (unsigned, DeclName, ObjCSelector))
-
-ERROR(objc_witness_selector_mismatch,none,
-      "Objective-C method %2 provided by " OBJC_DIAG_SELECT
-      " does not match the requirement's selector (%3)",
-      (unsigned, DeclName, ObjCSelector, ObjCSelector))
-
-ERROR(objc_optional_requirement_conflict,none,
-      "Objective-C method %4 provided by " OBJC_DIAG_SELECT
-      " conflicts with optional requirement " OBJC_DIAG_SELECT_2
-      " in protocol %5",
-      (unsigned, DeclName, unsigned, DeclName, ObjCSelector, DeclName))
-
-NOTE(objc_optional_requirement_swift_rename,none,
-     "rename %select{method|initializer|property|subscript}0 to match "
-     "requirement %1", (bool, DeclName))
-
-ERROR(witness_non_objc,none,
-      "non-'@objc' " OBJC_DIAG_SELECT " does not satisfy requirement "
-      "of '@objc' protocol %2",
-      (unsigned, DeclName, DeclName))
-
-WARNING(witness_non_objc_optional,none,
-        "non-'@objc' " OBJC_DIAG_SELECT " does not satisfy optional "
-        "requirement of '@objc' protocol %2",
-        (unsigned, DeclName, DeclName))
-
-ERROR(witness_non_objc_storage,none,
-      "non-'@objc' %select{property %1|subscript}0 does not satisfy "
-      "requirement of '@objc' protocol %2",
-      (bool, DeclName, DeclName))
-
-WARNING(witness_non_objc_storage_optional,none,
-      "non-'@objc' %select{property %1|subscript}0 does not satisfy "
-      "optional requirement of '@objc' protocol %2",
-      (bool, DeclName, DeclName))
-
-ERROR(nonobjc_not_allowed,none,
-      "declaration is %" OBJC_ATTR_SELECT "0, and cannot be marked @nonobjc",
-      (unsigned))
-
-#undef OBJC_DIAG_SELECT_2
-#undef OBJC_DIAG_SELECT
-#undef OBJC_ATTR_SELECT
 
 //------------------------------------------------------------------------------
 // dynamic
@@ -3062,28 +2755,28 @@ NOTE(availability_marked_unavailable, none,
 
 NOTE(availability_introduced_in_swift, none,
      "%0 was introduced in Swift %1",
-    (DeclName, clang::VersionTuple))
+    (DeclName, llvm::VersionTuple))
 
 NOTE(availability_obsoleted, none,
      "%0 was obsoleted in %1 %2",
-    (DeclName, StringRef, clang::VersionTuple))
+    (DeclName, StringRef, llvm::VersionTuple))
 
 WARNING(availability_deprecated, none,
         "%0 %select{is|%select{is|was}3}1 deprecated"
         "%select{| %select{on|in}3 %2%select{| %4}3}1",
-        (DeclName, bool, StringRef, bool, clang::VersionTuple))
+        (DeclName, bool, StringRef, bool, llvm::VersionTuple))
 
 WARNING(availability_deprecated_msg, none,
         "%0 %select{is|%select{is|was}3}1 deprecated"
         "%select{| %select{on|in}3 %2%select{| %4}3}1: %5",
-        (DeclName, bool, StringRef, bool, clang::VersionTuple, StringRef))
+        (DeclName, bool, StringRef, bool, llvm::VersionTuple, StringRef))
 
 WARNING(availability_deprecated_rename, none,
         "%0 %select{is|%select{is|was}3}1 deprecated"
         "%select{| %select{on|in}3 %2%select{| %4}3}1: "
         "%select{renamed to|replaced by}5%" REPLACEMENT_DECL_KIND_SELECT "6 "
         "'%7'",
-        (DeclName, bool, StringRef, bool, clang::VersionTuple, bool, unsigned,
+        (DeclName, bool, StringRef, bool, llvm::VersionTuple, bool, unsigned,
          StringRef))
 #undef REPLACEMENT_DECL_KIND_SELECT
 
@@ -3098,7 +2791,7 @@ NOTE(availability_decl_more_than_enclosing_enclosing_here, none,
 
 ERROR(availability_decl_only_version_newer, none,
       "%0 is only available on %1 %2 or newer",
-      (DeclName, StringRef, clang::VersionTuple))
+      (DeclName, StringRef, llvm::VersionTuple))
 
 NOTE(availability_guard_with_version_check, none,
      "add 'if #available' version check", ())
@@ -3109,12 +2802,12 @@ NOTE(availability_add_attribute, none,
 ERROR(availability_accessor_only_version_newer, none,
       "%select{getter|setter}0 for %1 is only available on %2 %3"
       " or newer",
-      (/*AccessorKind*/unsigned, DeclName, StringRef, clang::VersionTuple))
+      (/*AccessorKind*/unsigned, DeclName, StringRef, llvm::VersionTuple))
 
 ERROR(availability_inout_accessor_only_version_newer, none,
       "cannot pass as inout because %select{getter|setter}0 for %1 is only "
       "available on %2 %3 or newer",
-      (/*AccessorKind*/unsigned, DeclName, StringRef, clang::VersionTuple))
+      (/*AccessorKind*/unsigned, DeclName, StringRef, llvm::VersionTuple))
 
 ERROR(availability_query_required_for_platform, none,
       "condition required for target platform '%0'", (StringRef))
@@ -3136,7 +2829,7 @@ ERROR(availability_stored_property_no_potential,
 
 ERROR(availability_protocol_requires_version,
       none, "protocol %0 requires %1 to be available on %2 %3 and newer",
-      (DeclName, DeclName, StringRef, clang::VersionTuple))
+      (DeclName, DeclName, StringRef, llvm::VersionTuple))
 
 NOTE(availability_protocol_requirement_here, none,
      "protocol requirement here", ())
