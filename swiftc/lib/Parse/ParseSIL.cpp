@@ -995,15 +995,14 @@ bool SILParser::parseSILDeclRef(SILDeclRef &Result,
   if (parseSILDottedPath(VD, values))
     return true;
 
-  // Initialize Kind, uncurryLevel and IsObjC.
+  // Initialize Kind and uncurryLevel.
   SILDeclRef::Kind Kind = SILDeclRef::Kind::Func;
   unsigned uncurryLevel = 0;
-  bool IsObjC = false;
   ResilienceExpansion expansion = ResilienceExpansion::Minimal;
 
   if (!P.consumeIf(tok::sil_exclamation)) {
     // Construct SILDeclRef.
-    Result = SILDeclRef(VD, Kind, expansion, uncurryLevel, IsObjC);
+    Result = SILDeclRef(VD, Kind, expansion, uncurryLevel, /*IsObjC=*/false);
     return false;
   }
 
@@ -1076,9 +1075,6 @@ bool SILParser::parseSILDeclRef(SILDeclRef &Result,
       } else if (!ParseState && Id.str() == "propertyinit") {
         Kind = SILDeclRef::Kind::StoredPropertyInitializer;
         ParseState = 1;
-      } else if (Id.str() == "foreign") {
-        IsObjC = true;
-        break;
       } else
         break;
     } else if (ParseState < 2 && P.Tok.is(tok::integer_literal)) {
@@ -1092,7 +1088,7 @@ bool SILParser::parseSILDeclRef(SILDeclRef &Result,
   } while (P.consumeIf(tok::period));
 
   // Construct SILDeclRef.
-  Result = SILDeclRef(VD, Kind, expansion, uncurryLevel, IsObjC);
+  Result = SILDeclRef(VD, Kind, expansion, uncurryLevel, /*IsObjC=*/false);
   return false;
 }
 
@@ -1653,8 +1649,6 @@ bool SILParser::parseSILInstruction(SILBasicBlock *BB, SILBuilder &B) {
       encoding = StringLiteralInst::Encoding::UTF8;
     } else if (P.Tok.getText() == "utf16") {
       encoding = StringLiteralInst::Encoding::UTF16;
-    } else if (P.Tok.getText() == "objc_selector") {
-      encoding = StringLiteralInst::Encoding::ObjCSelector;
     } else {
       P.diagnose(P.Tok, diag::sil_string_invalid_encoding, P.Tok.getText());
       return true;
@@ -2018,11 +2012,7 @@ bool SILParser::parseSILInstruction(SILBasicBlock *BB, SILBuilder &B) {
   case ValueKind::ThinFunctionToPointerInst:
   case ValueKind::PointerToThinFunctionInst:
   case ValueKind::ThinToThickFunctionInst:
-  case ValueKind::ThickToObjCMetatypeInst:
-  case ValueKind::ObjCToThickMetatypeInst:
-  case ValueKind::ConvertFunctionInst:
-  case ValueKind::ObjCExistentialMetatypeToObjectInst:
-  case ValueKind::ObjCMetatypeToObjectInst: {
+  case ValueKind::ConvertFunctionInst: {
     SILType Ty;
     Identifier ToToken;
     SourceLoc ToLoc;

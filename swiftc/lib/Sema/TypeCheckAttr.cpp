@@ -530,18 +530,6 @@ public:
   void visitAccessibilityAttr(AccessibilityAttr *attr);
   void visitSetterAccessibilityAttr(SetterAccessibilityAttr *attr);
 
-  void checkApplicationMainAttribute(DeclAttribute *attr,
-                                     Identifier Id_ApplicationDelegate,
-                                     Identifier Id_Kit,
-                                     Identifier Id_ApplicationMain);
-  
-  void visitNSApplicationMainAttr(NSApplicationMainAttr *attr);
-  void visitUIApplicationMainAttr(UIApplicationMainAttr *attr);
-
-  void visitUnsafeNoObjCTaggedPointerAttr(UnsafeNoObjCTaggedPointerAttr *attr);
-  void visitSwiftNativeObjCRuntimeBaseAttr(
-                                         SwiftNativeObjCRuntimeBaseAttr *attr);
-
   void checkOperatorAttribute(DeclAttribute *attr);
 
   void visitInfixAttr(InfixAttr *attr) { checkOperatorAttribute(attr); }

@@ -1561,10 +1561,6 @@ WARNING(override_class_declaration_in_extension_warning,none,
 ERROR(override_throws,none,
       "cannot override non-throwing %select{method|initializer}0 with "
       "throwing %select{method|initializer}0", (bool))
-ERROR(override_throws_objc,none,
-      "overriding a throwing @objc %select{method|initializer}0 with "
-      "a non-throwing %select{method|initializer}0 is not supported", (bool))
-
 ERROR(override_optional_mismatch,none,
       "cannot override %0 %select{parameter|index}1 of type %2 with "
       "non-optional type %3",
@@ -1633,14 +1629,6 @@ NOTE(class_here,none,
      "class %0 declared here", (Identifier))
 ERROR(inheritance_from_final_class,none,
       "inheritance from a final class %0", (Identifier))
-ERROR(inheritance_from_unspecialized_objc_generic_class,none,
-      "inheritance from a generic Objective-C class %0 must bind "
-      "type parameters of %0 to specific concrete types", (Identifier))
-ERROR(inheritance_from_cf_class,none,
-      "cannot inherit from Core Foundation type %0", (Identifier))
-ERROR(inheritance_from_objc_runtime_visible_class,none,
-      "cannot inherit from class %0 because it is only visible via the "
-      "Objective-C runtime", (Identifier))
 
 
 // Enums
@@ -1698,10 +1686,6 @@ ERROR(enum_with_raw_type_case_with_argument,none,
       "enum with raw type cannot have cases with arguments", ())
 NOTE(enum_raw_type_here,none,
      "declared raw type %0 here", (Type))
-ERROR(objc_enum_no_raw_type,none,
-      "'@objc' enum must declare an integer raw type", ())
-ERROR(objc_enum_raw_type_not_integer,none,
-      "'@objc' enum raw type %0 is not an integer type", (Type))
 ERROR(enum_non_integer_raw_value_auto_increment,none,
       "enum case must declare a raw value when the preceding raw value is not an integer", ())
 ERROR(enum_non_integer_convertible_raw_type_no_value,none,
