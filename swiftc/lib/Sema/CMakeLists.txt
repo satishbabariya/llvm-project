@@ -1,8 +1,84 @@
 add_swiftc_library(SwiftSema
+  AssociatedTypeInference.cpp
+  BuilderTransform.cpp
+  CSApply.cpp
+  CSBindings.cpp
+  CSDiagnostics.cpp
+  CSFix.cpp
+  CSGen.cpp
+  CSRanking.cpp
+  CSSimplify.cpp
+  CSSolver.cpp
+  CSStep.cpp
+  CSSyntacticElement.cpp
+  CodeSynthesis.cpp
+  CodeSynthesisDistributedActor.cpp
+  CompletionContextFinder.cpp
+  ConstantnessSemaDiagnostics.cpp
+  Constraint.cpp
+  ConstraintGraph.cpp
+  ConstraintLocator.cpp
+  ConstraintSystem.cpp
+  DebuggerTestingTransform.cpp
+  DerivedConformanceActor.cpp
+  DerivedConformanceAdditiveArithmetic.cpp
+  DerivedConformanceCaseIterable.cpp
+  DerivedConformanceCodable.cpp
+  DerivedConformanceCodingKey.cpp
+  DerivedConformanceComparable.cpp
+  DerivedConformanceDifferentiable.cpp
+  DerivedConformanceDistributedActor.cpp
+  DerivedConformanceEquatableHashable.cpp
+  DerivedConformanceError.cpp
+  DerivedConformanceRawRepresentable.cpp
+  DerivedConformances.cpp
+  IDETypeCheckingRequests.cpp
+  ImportResolution.cpp
+  InstrumenterSupport.cpp
+  LifetimeDependence.cpp
+  LookupVisibleDecls.cpp
+  MiscDiagnostics.cpp
+  PCMacro.cpp
+  PlaygroundTransform.cpp
+  PreCheckExpr.cpp
+  ResilienceDiagnostics.cpp
   Sema.cpp
+  SourceLoader.cpp
+  SyntacticElementTarget.cpp
+  TypeCheckAccess.cpp
+  TypeCheckAttr.cpp
+  TypeCheckAvailability.cpp
+  TypeCheckBitwise.cpp
+  TypeCheckCaptures.cpp
+  TypeCheckCircularity.cpp
+  TypeCheckCodeCompletion.cpp
+  TypeCheckConcurrency.cpp
+  TypeCheckConstraints.cpp
+  TypeCheckDecl.cpp
+  TypeCheckDeclOverride.cpp
+  TypeCheckDeclPrimary.cpp
+  TypeCheckDistributed.cpp
+  TypeCheckEffects.cpp
+  TypeCheckExpr.cpp
+  TypeCheckGeneric.cpp
+  TypeCheckInvertible.cpp
+  TypeCheckMacros.cpp
+  TypeCheckNameLookup.cpp
+  TypeCheckPattern.cpp
+  TypeCheckPropertyWrapper.cpp
+  TypeCheckProtocol.cpp
+  TypeCheckRegex.cpp
+  TypeCheckRequestFunctions.cpp
+  TypeCheckStmt.cpp
+  TypeCheckStorage.cpp
+  TypeCheckSwitchStmt.cpp
+  TypeCheckType.cpp
+  TypeChecker.cpp
 
   LINK_LIBS
   SwiftAST
+  SwiftBasic
+  SwiftParse
   SwiftSupport
 
   LINK_COMPONENTS
