@@ -6017,18 +6017,6 @@ public:
 
     // An initializer is ObjC-compatible if it's explicitly @objc or a member
     // of an ObjC-compatible class.
-    if (CD->getDeclContext()->isTypeContext()) {
-      Optional<ObjCReason> isObjC = shouldMarkAsObjC(TC, CD,
-          /*allowImplicit=*/true);
-
-      Optional<ForeignErrorConvention> errorConvention;
-      if (isObjC &&
-          (CD->isInvalid() ||
-           !TC.isRepresentableInObjC(CD, *isObjC, errorConvention)))
-        isObjC = None;
-      markAsObjC(TC, CD, isObjC, errorConvention);
-    }
-
     // If this initializer overrides a 'required' initializer, it must itself
     // be marked 'required'.
     if (!CD->getAttrs().hasAttribute<RequiredAttr>()) {
@@ -6058,8 +6046,6 @@ public:
         }
       }
     }
-
-    inferDynamic(TC.Context, CD);
 
     TC.checkDeclAttributes(CD);
   }
