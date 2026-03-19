@@ -110,7 +110,7 @@ set(LLVM_ALL_PROJECTS "bolt;clang;clang-tools-extra;cross-project-tests;lld;lldb
 # it is preferred to use LLVM_ENABLE_RUNTIMES for them instead.
 #
 # The flang project is not yet part of "all" projects (see C++ requirements).
-set(LLVM_EXTRA_PROJECTS "flang" "libc" "compiler-rt")
+set(LLVM_EXTRA_PROJECTS "flang" "swiftc" "libc" "compiler-rt")
 # List of all known projects in the mono repo
 set(LLVM_KNOWN_PROJECTS "${LLVM_ALL_PROJECTS};${LLVM_EXTRA_PROJECTS}")
 set(LLVM_ENABLE_PROJECTS "" CACHE STRING
@@ -168,6 +168,13 @@ if ("flang" IN_LIST LLVM_ENABLE_PROJECTS)
     message(STATUS "Enabling Flang-RT as a dependency of Flang")
     list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
   endif ()
+endif()
+
+if ("swiftc" IN_LIST LLVM_ENABLE_PROJECTS)
+  if (NOT "clang" IN_LIST LLVM_ENABLE_PROJECTS)
+    message(STATUS "Enabling clang as a dependency to swiftc")
+    list(APPEND LLVM_ENABLE_PROJECTS "clang")
+  endif()
 endif()
 
 if ("lldb" IN_LIST LLVM_ENABLE_PROJECTS)

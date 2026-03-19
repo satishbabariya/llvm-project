@@ -1,0 +1,28 @@
+@LIT_SITE_CFG_IN_HEADER@
+
+import sys
+import lit.util
+
+config.llvm_tools_dir = lit_config.substitute("@LLVM_TOOLS_DIR@")
+config.llvm_shlib_dir = lit_config.substitute(path(r"@SHLIBDIR@"))
+config.llvm_plugin_ext = "@LLVM_PLUGIN_EXT@"
+config.host_triple = "@LLVM_HOST_TRIPLE@"
+config.target_triple = "@LLVM_TARGET_TRIPLE@"
+config.llvm_target_triple_env = "@LLVM_TARGET_TRIPLE_ENV@"
+config.lit_tools_dir = "@LLVM_LIT_TOOLS_DIR@"
+config.errc_messages = "@LLVM_LIT_ERRC_MESSAGES@"
+config.swiftc_obj_root = "@SWIFTC_BINARY_DIR@"
+config.swiftc_tools_dir = lit_config.substitute("@SWIFTC_TOOLS_DIR@")
+config.swiftc_llvm_tools_dir = "@CMAKE_BINARY_DIR@/bin"
+config.swiftc_examples = @LLVM_INCLUDE_EXAMPLES@
+config.python_executable = "@PYTHON_EXECUTABLE@"
+config.swiftc_standalone_build = @SWIFTC_STANDALONE_BUILD@
+config.has_plugins = @LLVM_ENABLE_PLUGINS@
+config.targets_to_build = "@TARGETS_TO_BUILD@"
+config.default_sysroot = "@DEFAULT_SYSROOT@"
+
+import lit.llvm
+lit.llvm.initialize(lit_config, config)
+
+# Let the main config do the real work.
+lit_config.load_config(config, "@SWIFTC_SOURCE_DIR@/test/lit.cfg.py")

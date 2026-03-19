@@ -1,0 +1,7 @@
+add_subdirectory(Support)
+add_subdirectory(AST)
+add_subdirectory(Parse)
+add_subdirectory(Sema)
+add_subdirectory(IRGen)
+add_subdirectory(Frontend)
+add_subdirectory(FrontendTool)
