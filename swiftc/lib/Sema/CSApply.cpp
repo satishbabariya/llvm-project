@@ -1434,42 +1434,11 @@ namespace {
       return ctorRef;
     }
 
-    /// Bridge the given value (which is an error type) to NSError.
     Expr *bridgeErrorToObjectiveC(Expr *value) {
-      auto &tc = cs.getTypeChecker();
-
-      // Use _bridgeErrorToNSError to convert to an NSError.
-      auto fn = tc.Context.getBridgeErrorToNSError(&tc);
-      SourceLoc loc = value->getLoc();
-      if (!fn) {
-        tc.diagnose(loc, diag::missing_nserror_bridging_function);
-        return nullptr;
-      }
-      tc.validateDecl(fn);
-
-      ConcreteDeclRef fnDeclRef(fn);
-      auto fnRef = new (tc.Context) DeclRefExpr(fnDeclRef, DeclNameLoc(loc),
-                                                /*Implicit=*/true);
-      fnRef->setType(fn->getInterfaceType());
-      fnRef->setFunctionRefKind(FunctionRefKind::SingleApply);
-      cs.setExprTypes(value);
-      Expr *call = CallExpr::createImplicit(tc.Context, fnRef, { value }, { });
-      if (tc.typeCheckExpressionShallow(call, dc))
-        return nullptr;
-
-      cs.cacheExprTypes(call);
-
-      // The return type of _bridgeErrorToNSError is formally
-      // 'AnyObject' to avoid stdlib-to-Foundation dependencies, but it's
-      // really NSError.  Abuse CovariantReturnConversionExpr to fix this.
-      auto nsErrorDecl = tc.Context.getNSErrorDecl();
-      assert(nsErrorDecl && "Missing NSError?");
-      Type nsErrorType = nsErrorDecl->getDeclaredInterfaceType();
-      return cs.cacheType(new (tc.Context)
-                              CovariantReturnConversionExpr(call, nsErrorType));
+      return nullptr;
     }
 
-    /// Bridge the given value to its corresponding Objective-C object
+        /// Bridge the given value to its corresponding Objective-C object
     /// type.
     ///
     /// This routine should only be used for bridging value types.
