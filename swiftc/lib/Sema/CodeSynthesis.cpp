@@ -571,98 +571,6 @@ static Expr *createPropertyLoadOrCallSuperclassGetter(FuncDecl *accessor,
                                SelfAccessKind::Super, TC);
 }
 
-/// Look up the NSCopying protocol from the Foundation module, if present.
-/// Otherwise return null.
-static ProtocolDecl *getNSCopyingProtocol(TypeChecker &TC,
-                                          DeclContext *DC) {
-  ASTContext &ctx = TC.Context;
-  auto foundation = ctx.getLoadedModule(ctx.Id_Foundation);
-  if (!foundation)
-    return nullptr;
-
-  SmallVector<ValueDecl *, 2> results;
-  DC->lookupQualified(ModuleType::get(foundation),
-                      ctx.getSwiftId(KnownFoundationEntity::NSCopying),
-                      NL_QualifiedDefault | NL_KnownNonCascadingDependency,
-                      /*typeResolver=*/nullptr,
-                      results);
-
-  if (results.size() != 1)
-    return nullptr;
-
-  return dyn_cast<ProtocolDecl>(results.front());
-}
-
-
-
-/// Synthesize the code to store 'Val' to 'VD', given that VD has an @NSCopying
-/// attribute on it.  We know that VD is a stored property in a class, so we
-/// just need to generate something like "self.property = val.copy(zone: nil)"
-/// here.  This does some type checking to validate that the call will succeed.
-static Expr *synthesizeCopyWithZoneCall(Expr *Val, VarDecl *VD,
-                                        TypeChecker &TC) {
-  auto &Ctx = TC.Context;
-
-  // We support @NSCopying on class types (which conform to NSCopying),
-  // protocols which conform, and option types thereof.
-  Type UnderlyingType = TC.getTypeOfRValue(VD, /*want interface type*/false);
-
-  bool isOptional = false;
-  if (Type optionalEltTy = UnderlyingType->getAnyOptionalObjectType()) {
-    UnderlyingType = optionalEltTy;
-    isOptional = true;
-  }
-
-  // The element type must conform to NSCopying.  If not, emit an error and just
-  // recovery by synthesizing without the copy call.
-  auto *CopyingProto = getNSCopyingProtocol(TC, VD->getDeclContext());
-  if (!CopyingProto || !TC.conformsToProtocol(UnderlyingType, CopyingProto,
-                                              VD->getDeclContext(), None)) {
-    TC.diagnose(VD->getLoc(), diag::nscopying_doesnt_conform);
-    return Val;
-  }
-
-  // If we have an optional type, we have to "?" the incoming value to only
-  // evaluate the subexpression if the incoming value is non-null.
-  if (isOptional)
-    Val = new (Ctx) BindOptionalExpr(Val, SourceLoc(), 0);
-
-  // Generate:
-  // (force_value_expr type='<null>'
-  //   (call_expr type='<null>'
-  //     (unresolved_dot_expr type='<null>' field 'copy'
-  //       "Val")
-  //     (paren_expr type='<null>'
-  //       (nil_literal_expr type='<null>'))))
-  auto UDE = new (Ctx) UnresolvedDotExpr(Val, SourceLoc(),
-                                         Ctx.getIdentifier("copy"),
-                                         DeclNameLoc(), /*implicit*/true);
-  Expr *Nil = new (Ctx) NilLiteralExpr(SourceLoc(), /*implicit*/true);
-
-  //- (id)copyWithZone:(NSZone *)zone;
-  Expr *Call = CallExpr::createImplicit(Ctx, UDE, { Nil }, { Ctx.Id_with });
-
-  TypeLoc ResultTy;
-  ResultTy.setType(VD->getType(), true);
-
-  // If we're working with non-optional types, we're forcing the cast.
-  if (!isOptional) {
-    Call = new (Ctx) ForcedCheckedCastExpr(Call, SourceLoc(), SourceLoc(),
-                                           TypeLoc::withoutLoc(UnderlyingType));
-    Call->setImplicit();
-    return Call;
-  }
-
-  // We're working with optional types, so perform a conditional checked
-  // downcast.
-  Call = new (Ctx) ConditionalCheckedCastExpr(Call, SourceLoc(), SourceLoc(),
-                                           TypeLoc::withoutLoc(UnderlyingType));
-  Call->setImplicit();
-
-  // Use OptionalEvaluationExpr to evaluate the "?".
-  return new (Ctx) OptionalEvaluationExpr(Call);
-}
-
 /// In a synthesized accessor body, store 'value' to the appropriate element.
 ///
 /// If the property is an override, we call the superclass setter.
@@ -672,13 +580,6 @@ static void createPropertyStoreOrCallSuperclassSetter(FuncDecl *accessor,
                                                AbstractStorageDecl *storage,
                                                SmallVectorImpl<ASTNode> &body,
                                                       TypeChecker &TC) {
-  // If the storage is an @NSCopying property, then we store the
-  // result of a copyWithZone call on the value, not the value itself.
-  if (auto property = dyn_cast<VarDecl>(storage)) {
-    if (property->getAttrs().hasAttribute<NSCopyingAttr>())
-      value = synthesizeCopyWithZoneCall(value, property, TC);
-  }
-
   // Create:
   //   (assign (decl_ref_expr(VD)), decl_ref_expr(value))
   // or:
@@ -850,25 +751,6 @@ static FuncDecl *addMaterializeForSet(AbstractStorageDecl *storage,
   return materializeForSet;
 }
 
-static void convertNSManagedStoredVarToComputed(VarDecl *VD, TypeChecker &TC) {
-  assert(VD->getStorageKind() == AbstractStorageDecl::Stored);
-
-  // Create the getter.
-  auto *Get = createGetterPrototype(VD, TC);
-
-  // Create the setter.
-  ParamDecl *SetValueDecl = nullptr;
-  auto *Set = createSetterPrototype(VD, SetValueDecl, TC);
-
-  // Okay, we have both the getter and setter.  Set them in VD.
-  VD->makeComputed(SourceLoc(), Get, Set, nullptr, SourceLoc());
-
-  // We've added some members to our containing class/extension, add them to
-  // the members list.
-  addMemberToContextIfNeeded(Get, VD->getDeclContext());
-  addMemberToContextIfNeeded(Set, VD->getDeclContext());
-}
-
 /// The specified AbstractStorageDecl was just found to satisfy a
 /// protocol property requirement.  Ensure that it has the full
 /// complement of accessors, and validate them.
@@ -878,10 +760,7 @@ void TypeChecker::synthesizeWitnessAccessorsForStorage(
   // If the decl is stored, convert it to StoredWithTrivialAccessors
   // by synthesizing the full set of accessors.
   if (!storage->hasAccessorFunctions()) {
-    if (storage->getAttrs().hasAttribute<NSManagedAttr>())
-      convertNSManagedStoredVarToComputed(cast<VarDecl>(storage), *this);
-    else
-      addTrivialAccessorsToStorage(storage, *this);
+    addTrivialAccessorsToStorage(storage, *this);
 
     if (auto getter = storage->getGetter())
       validateDecl(getter);
@@ -889,10 +768,7 @@ void TypeChecker::synthesizeWitnessAccessorsForStorage(
       validateDecl(setter);
   }
 
-  // @objc protocols don't need a materializeForSet since ObjC doesn't
-  // have that concept.
-  bool wantMaterializeForSet =
-    !requirement->isObjC() && requirement->getSetter();
+  bool wantMaterializeForSet = requirement->getSetter();
 
   // If we want wantMaterializeForSet, create it now.
   if (wantMaterializeForSet && !storage->getMaterializeForSetFunc())
@@ -1642,9 +1518,6 @@ void swift::maybeAddMaterializeForSet(AbstractStorageDecl *storage,
     if (container->hasClangNode()) return;
   }
 
-  // @NSManaged properties don't need this.
-  if (storage->getAttrs().hasAttribute<NSManagedAttr>()) return;
-
   addMaterializeForSet(storage, TC);
 }
 
@@ -1852,14 +1725,8 @@ void swift::maybeAddAccessorsToVariable(VarDecl *var, TypeChecker &TC) {
     }
     return;
 
-  // NSManaged properties on classes require special handling.
   } else if (dc->getAsClassOrClassExtensionContext()) {
-    if (var->getAttrs().hasAttribute<NSManagedAttr>()) {
-      convertNSManagedStoredVarToComputed(var, TC);
-      return;
-    }
-
-  // Stored properties imported from Clang don't get accessors.
+    // Nothing special needed.
   } else if (auto *structDecl = dyn_cast<StructDecl>(dc)) {
     if (structDecl->hasClangNode())
       return;

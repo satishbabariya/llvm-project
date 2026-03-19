@@ -858,7 +858,6 @@ public:
   Constraint *failedConstraint = nullptr;
 
   /// Expressions that are known to be unevaluated.
-  /// Note: this is only used to support ObjCSelectorExpr at the moment.
   llvm::SmallPtrSet<Expr *, 2> UnevaluatedRootExprs;
 
   /// The original CS if this CS was created as a simplification of another CS

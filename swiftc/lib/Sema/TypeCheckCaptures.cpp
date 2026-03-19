@@ -97,15 +97,6 @@ public:
     
       Action walkToTypePre(Type ty) override {
         Callback(ty);
-        // Pseudogeneric classes don't use their generic parameters so we
-        // don't need to visit them.
-        if (AFR.isObjC()) {
-          if (auto clas = dyn_cast_or_null<ClassDecl>(ty->getAnyNominal())) {
-            if (clas->usesObjCGenericsModel()) {
-              return Action::SkipChildren;
-            }
-          }
-        }
         return Action::Continue;
       }
     };
@@ -226,10 +217,8 @@ public:
     auto *D = DRE->getDecl();
 
     // Capture the generic parameters of the decl.
-    if (!AFR.isObjC() || !D->isObjC() || isa<ConstructorDecl>(D)) {
-      for (auto sub : DRE->getDeclRef().getSubstitutions()) {
-        checkType(sub.getReplacement(), DRE->getLoc());
-      }
+    for (auto sub : DRE->getDeclRef().getSubstitutions()) {
+      checkType(sub.getReplacement(), DRE->getLoc());
     }
 
     // DC is the DeclContext where D was defined
@@ -437,164 +426,12 @@ public:
   }
 
   bool usesTypeMetadataOfFormalType(Expr *E) {
-    // For non-ObjC closures, assume the type metadata is always used.
-    if (!AFR.isObjC())
-      return true;
-
-    if (!E->getType() || E->getType()->hasError())
-      return false;
-
-    // We can use Objective-C generics in limited ways without reifying
-    // their type metadata, meaning we don't need to capture their generic
-    // params.
-
-    // Look through one layer of optionality when considering the class-
-
-    // Referring to a class-constrained generic or metatype
-    // doesn't require its type metadata.
-    if (auto declRef = dyn_cast<DeclRefExpr>(E))
-      return (!declRef->getDecl()->isObjC()
-              && !E->getType()->getLValueOrInOutObjectType()
-                              ->hasRetainablePointerRepresentation()
-              && !E->getType()->getLValueOrInOutObjectType()
-                              ->is<AnyMetatypeType>());
-
-    // Loading classes or metatypes doesn't require their metadata.
-    if (isa<LoadExpr>(E))
-      return (!E->getType()->hasRetainablePointerRepresentation()
-              && !E->getType()->is<AnyMetatypeType>());
-
-    // Accessing @objc members doesn't require type metadata.
-    // rdar://problem/27796375 -- allocating init entry points for ObjC
-    // initializers are generated as true Swift generics, so reify type
-    // parameters.
-    if (auto memberRef = dyn_cast<MemberRefExpr>(E))
-      return !memberRef->getMember().getDecl()->hasClangNode();
-
-    if (auto applyExpr = dyn_cast<ApplyExpr>(E)) {
-      if (auto methodApply = dyn_cast<ApplyExpr>(applyExpr->getFn())) {
-        if (auto callee = dyn_cast<DeclRefExpr>(methodApply->getFn())) {
-          return !callee->getDecl()->isObjC()
-            || isa<ConstructorDecl>(callee->getDecl());
-        }
-      }
-      if (auto callee = dyn_cast<DeclRefExpr>(applyExpr->getFn())) {
-        return !callee->getDecl()->isObjC()
-          || isa<ConstructorDecl>(callee->getDecl());
-      }
-    }
-
-    if (auto subscriptExpr = dyn_cast<SubscriptExpr>(E)) {
-      return (subscriptExpr->hasDecl() &&
-              !subscriptExpr->getDecl().getDecl()->isObjC());
-    }
-
-    // Getting the dynamic type of a class doesn't require type metadata.
-    if (isa<DynamicTypeExpr>(E))
-      return (!E->getType()->castTo<AnyMetatypeType>()->getInstanceType()
-                  ->hasRetainablePointerRepresentation());
-
-    // Building a fixed-size tuple doesn't require type metadata.
-    // Approximate this for the purposes of being able to invoke @objc methods
-    // by considering tuples of ObjC-representable types to not use metadata.
-    if (auto tuple = dyn_cast<TupleExpr>(E)) {
-      for (auto elt : tuple->getType()->castTo<TupleType>()->getElements()) {
-        if (!elt.getType()->isRepresentableIn(ForeignLanguage::ObjectiveC,
-                                              AFR.getAsDeclContext()))
-          return true;
-      }
-      return false;
-    }
-
-    // Coercion by itself is a no-op.
-    if (isa<CoerceExpr>(E))
-      return false;
-
-    // Upcasting doesn't require type metadata.
-    if (isa<DerivedToBaseExpr>(E))
-      return false;
-    if (isa<ArchetypeToSuperExpr>(E))
-      return false;
-    if (isa<CovariantReturnConversionExpr>(E))
-      return false;
-    if (isa<MetatypeConversionExpr>(E))
-      return false;
-
-    // Identity expressions are no-ops.
-    if (isa<IdentityExpr>(E))
-      return false;
-
-    // Discarding an assignment is a no-op.
-    if (isa<DiscardAssignmentExpr>(E))
-      return false;
-
-    // Opening an @objc existential or metatype is a no-op.
-    if (auto open = dyn_cast<OpenExistentialExpr>(E))
-      return (!open->getSubExpr()->getType()->isObjCExistentialType()
-              && !open->getSubExpr()->getType()->is<AnyMetatypeType>());
-
-    // Erasure to an ObjC existential or between metatypes doesn't require
-    // type metadata.
-    if (auto erasure = dyn_cast<ErasureExpr>(E)) {
-      if (E->getType()->isObjCExistentialType()
-          || E->getType()->is<AnyMetatypeType>())
-        return false;
-      
-      // We also special case Any erasure in pseudogeneric contexts
-      // not to rely on concrete type metadata by erasing from AnyObject
-      // as a waypoint.
-      if (E->getType()->isAny()
-          && erasure->getSubExpr()->getType()->is<ArchetypeType>())
-        return false;
-
-      // Erasure to a Swift protocol always captures the type metadata from
-      // its subexpression.
-      checkType(erasure->getSubExpr()->getType(),
-                erasure->getSubExpr()->getLoc());
-      return true;
-    }
-
-    
-    // Converting an @objc metatype to AnyObject doesn't require type
-    // metadata.
-    if (isa<ClassMetatypeToObjectExpr>(E)
-        || isa<ExistentialMetatypeToObjectExpr>(E))
-      return false;
-    
-    // Casting to an ObjC class doesn't require the metadata of its type
-    // parameters, if any.
-    if (auto cast = dyn_cast<CheckedCastExpr>(E)) {
-      // If we failed to resolve the written type, we've emitted an
-      // earlier diagnostic and should bail.
-      auto toTy = cast->getCastTypeLoc().getType();
-      if (!toTy || toTy->hasError())
-        return false;
-
-      if (auto clas = dyn_cast_or_null<ClassDecl>(
-                         cast->getCastTypeLoc().getType()->getAnyNominal())) {
-        if (clas->usesObjCGenericsModel()) {
-          return false;
-        }
-      }
-    }
-    
-    // Assigning an object doesn't require type metadata.
-    if (auto assignment = dyn_cast<AssignExpr>(E))
-      return !assignment->getSrc()->getType()
-        ->hasRetainablePointerRepresentation();
-
     return true;
   }
 
   std::pair<bool, Expr *> walkToExprPre(Expr *E) override {
     if (usesTypeMetadataOfFormalType(E)) {
       checkType(E->getType(), E->getLoc());
-    }
-
-    // Some kinds of expression don't really evaluate their subexpression,
-    // so we don't need to traverse.
-    if (isa<ObjCSelectorExpr>(E)) {
-      return { false, E };
     }
 
     if (auto *ECE = dyn_cast<ExplicitCastExpr>(E)) {
@@ -736,19 +573,6 @@ void TypeChecker::computeCaptures(AnyFunctionRef AFR) {
     AFR.getCaptureInfo().setCaptures(None);
   else
     AFR.getCaptureInfo().setCaptures(Context.AllocateCopy(Captures));
-
-  // Extensions of generic ObjC functions can't use generic parameters from
-  // their context.
-  if (AFD && GenericParamCaptureLoc.isValid()) {
-    if (auto Clas = AFD->getParent()->getAsClassOrClassExtensionContext()) {
-      if (Clas->isGenericContext() && Clas->hasClangNode()) {
-        diagnose(AFD->getLoc(),
-                 diag::objc_generic_extension_using_type_parameter);
-        diagnose(GenericParamCaptureLoc,
-                 diag::objc_generic_extension_using_type_parameter_here);
-      }
-    }
-  }
 
   // Diagnose if we have local captures and there were C pointers formed to
   // this function before we computed captures.

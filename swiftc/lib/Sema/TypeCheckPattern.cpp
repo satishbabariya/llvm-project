@@ -1263,9 +1263,6 @@ bool TypeChecker::coercePatternToType(Pattern *&P, DeclContext *dc, Type type,
 
     auto castType = IP->getCastTypeLoc().getType();
 
-    // Make sure we use any bridged NSError-related conformances.
-    useBridgedNSErrorConformances(dc, castType);
-
     // Determine whether we have an imbalance in the number of optionals.
     SmallVector<Type, 2> inputTypeOptionals;
     type->lookThroughAllAnyOptionalTypes(inputTypeOptionals);

@@ -298,16 +298,7 @@ namespace {
     bool SuppressDiagnostics;
     bool SkipClosures;
 
-    /// Recognize used conformances from an imported type when we must emit
-    /// the witness table.
-    ///
-    /// This arises in _BridgedStoredNSError, where we wouldn't
-    /// otherwise pull in the witness table, causing dynamic casts to
-    /// perform incorrectly, and _ErrorCodeProtocol, where we need to
-    /// check for _BridgedStoredNSError conformances on the
-    /// corresponding ErrorType.
     void checkForImportedUsedConformances(Type toType) {
-      cs.getTypeChecker().useBridgedNSErrorConformances(dc, toType);
     }
 
     /// \brief Coerce the given tuple to another tuple type.
@@ -1437,209 +1428,18 @@ namespace {
     Expr *bridgeErrorToObjectiveC(Expr *value) {
       return nullptr;
     }
-
-        /// Bridge the given value to its corresponding Objective-C object
-    /// type.
-    ///
-    /// This routine should only be used for bridging value types.
-    ///
-    /// \param value The value to be bridged.
     Expr *bridgeToObjectiveC(Expr *value) {
-      // TODO: It would be nicer to represent this as a special AST node
-      // instead of inlining the bridging calls in the AST. Doing so would
-      // simplify the AST and make it easier for SILGen to peephole bridging
-      // conversions.
-      auto &tc = cs.getTypeChecker();
-
-      // Find the _ObjectiveCBridgeable protocol.
-      auto bridgedProto
-        = tc.Context.getProtocol(KnownProtocolKind::ObjectiveCBridgeable);
-
-      // Find the conformance of the value type to _ObjectiveCBridgeable.
-      Type valueType = cs.getType(value)->getRValueType();
-      if (auto conformance =
-            tc.conformsToProtocol(valueType, bridgedProto, cs.DC,
-                                  (ConformanceCheckFlags::InExpression|
-                                   ConformanceCheckFlags::Used))) {
-        cs.setExprTypes(value);
-
-        // Form the call.
-        auto result =
-            tc.callWitness(value, cs.DC, bridgedProto, *conformance,
-                           tc.Context.Id_bridgeToObjectiveC,
-                           { }, diag::broken_bridged_to_objc_protocol);
-
-        if (result)
-          cs.cacheExprTypes(result);
-
-        return result;
-      }
-      
-      // If there is an Error conformance, try bridging as an error.
-      if (tc.isConvertibleTo(valueType,
-                             tc.Context.getProtocol(KnownProtocolKind::Error)
-                               ->getDeclaredType(),
-                             cs.DC))
-        return bridgeErrorToObjectiveC(value);
-
-      // Fall back to universal bridging.
-      auto bridgeAnything = tc.Context.getBridgeAnythingToObjectiveC(&tc);
-      value = cs.coerceToRValue(value);
-      auto valueSub = Substitution(valueType, {});
-      auto bridgeAnythingRef = ConcreteDeclRef(tc.Context, bridgeAnything,
-                                               valueSub);
-      auto valueParenTy = ParenType::get(tc.Context, cs.getType(value));
-      auto bridgeTy = tc.Context.getProtocol(KnownProtocolKind::AnyObject)
-        ->getDeclaredType();
-      auto bridgeFnTy = FunctionType::get(valueParenTy, bridgeTy);
-      // FIXME: Wrap in ParenExpr to prevent bogus "tuple passed as argument"
-      // errors.
-      auto valueParen = new (tc.Context) ParenExpr(SourceLoc(),
-                                                   value,
-                                                   SourceLoc(),
-                                                   /*trailing closure*/ false,
-                                                   valueParenTy);
-
-      valueParen->setImplicit();
-      auto fnRef = new (tc.Context) DeclRefExpr(bridgeAnythingRef,
-                                                DeclNameLoc(),
-                                                /*implicit*/ true,
-                                                AccessSemantics::Ordinary,
-                                                bridgeFnTy);
-
-      fnRef->setFunctionRefKind(FunctionRefKind::SingleApply);
-      Expr *call = CallExpr::createImplicit(tc.Context, fnRef, valueParen,
-                                            { Identifier() });
-      cs.setType(call, bridgeTy);
-      cs.cacheSubExprTypes(call);
-      return call;
+      return nullptr;
     }
 
-    /// Bridge the given object from Objective-C to its value type.
-    ///
-    /// This routine should only be used for bridging value types.
-    ///
-    /// \param object The object, whose type should already be of the type
-    /// that the value type bridges through.
-    ///
-    /// \param valueType The value type to which we are bridging.
-    ///
-    /// \param conditional Whether the bridging should be conditional. If false,
-    /// uses forced bridging.
-    ///
-    /// \returns a value of type \c valueType (optional if \c conditional) that
-    /// stores the bridged result or (when \c conditional) an empty optional if
-    /// conditional bridging fails.
     Expr *bridgeFromObjectiveC(Expr *object, Type valueType, bool conditional) {
-      auto &tc = cs.getTypeChecker();
-
-      // Find the _BridgedToObjectiveC protocol.
-      auto bridgedProto
-        = tc.Context.getProtocol(KnownProtocolKind::ObjectiveCBridgeable);
-
-      // Try to find the conformance of the value type to _BridgedToObjectiveC.
-      auto bridgedToObjectiveCConformance
-        = tc.conformsToProtocol(valueType,
-                                bridgedProto,
-                                cs.DC,
-                                (ConformanceCheckFlags::InExpression|
-                                 ConformanceCheckFlags::Used));
-
-      FuncDecl *fn = nullptr;
-
-      if (bridgedToObjectiveCConformance) {
-        // The conformance to _BridgedToObjectiveC is statically known.
-        // Retrieve the bridging operation to be used if a static conformance
-        // to _BridgedToObjectiveC can be proven.
-        fn = conditional
-                 ? tc.Context.getConditionallyBridgeFromObjectiveCBridgeable(&tc)
-                 : tc.Context.getForceBridgeFromObjectiveCBridgeable(&tc);
-      } else {
-        // Retrieve the bridging operation to be used if a static conformance
-        // to _BridgedToObjectiveC cannot be proven.
-        fn = conditional ? tc.Context.getConditionallyBridgeFromObjectiveC(&tc)
-                         : tc.Context.getForceBridgeFromObjectiveC(&tc);
-      }
-
-      if (!fn) {
-        tc.diagnose(object->getLoc(), diag::missing_bridging_function,
-                    conditional);
-        return nullptr;
-      }
-
-      tc.validateDecl(fn);
-      
-      // Form a reference to the function. The bridging operations are generic,
-      // so we need to form substitutions and compute the resulting type.
-      auto Conformances =
-        tc.Context.AllocateUninitialized<ProtocolConformanceRef>(
-                                        bridgedToObjectiveCConformance ? 1 : 0);
-
-      if (bridgedToObjectiveCConformance) {
-        Conformances[0] = *bridgedToObjectiveCConformance;
-      }
-
-      auto fnGenericParams
-        = fn->getGenericSignatureOfContext()->getGenericParams();
-
-      Substitution Subs[1] = {
-        Substitution(valueType, Conformances)
-      };
-
-      ConcreteDeclRef fnSpecRef(tc.Context, fn, Subs);
-      auto fnRef = new (tc.Context) DeclRefExpr(fnSpecRef,
-                                                DeclNameLoc(
-                                                  object->getStartLoc()),
-                                                /*Implicit=*/true);
-      fnRef->setFunctionRefKind(FunctionRefKind::SingleApply);
-
-      TypeSubstitutionMap subMap;
-      auto genericParam = fnGenericParams[0];
-      subMap[genericParam->getCanonicalType()->castTo<SubstitutableType>()]
-        = valueType;
-      cs.setType(fnRef, fn->getInterfaceType().subst(dc->getParentModule(),
-                                                     subMap,
-                                                     None));
-
-      // Form the arguments.
-      Expr *args[2] = {
-        object,
-        cs.cacheType(new (tc.Context) DotSelfExpr(
-                         cs.cacheType(
-                             TypeExpr::createImplicitHack(object->getLoc(),
-                                                          valueType,
-                                                          tc.Context)),
-                         object->getLoc(), object->getLoc(),
-                         MetatypeType::get(valueType)))
-      };
-      args[1]->setImplicit();
-
-      // Form the call and type-check it.
-      Expr *call = CallExpr::createImplicit(tc.Context, fnRef, args,
-                                            { Identifier(), Identifier() });
-      cs.cacheSubExprTypes(call);
-      cs.setSubExprTypes(call);
-
-      if (tc.typeCheckExpressionShallow(call, dc))
-        return nullptr;
-
-      cs.cacheExprTypes(call);
-      return call;
+      return nullptr;
     }
 
-    /// Bridge the given object from Objective-C to its value type.
-    ///
-    /// This routine should only be used for bridging value types.
-    ///
-    /// \param object The object, whose type should already be of the type
-    /// that the value type bridges through.
-    ///
-    /// \param valueType The value type to which we are bridging.
-    ///
-    /// \returns a value of type \c valueType that stores the bridged result.
     Expr *forceBridgeFromObjectiveC(Expr *object, Type valueType) {
-      return bridgeFromObjectiveC(object, valueType, false);
+      return nullptr;
     }
+
 
     TypeAliasDecl *MaxIntegerTypeDecl = nullptr;
     TypeAliasDecl *MaxFloatTypeDecl = nullptr;
@@ -3569,12 +3369,6 @@ namespace {
 
     Expr *walkToExprPost(Expr *expr) {
       Expr *result = visit(expr);
-
-      // Mark any _ObjectiveCBridgeable conformances as 'used'.
-      if (result) {
-        auto &tc = cs.getTypeChecker();
-        tc.useObjectiveCBridgeableConformances(cs.DC, cs.getType(result));
-      }
 
       assert(expr == ExprStack.back());
       ExprStack.pop_back();
