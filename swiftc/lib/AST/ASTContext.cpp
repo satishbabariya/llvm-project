@@ -1054,11 +1054,6 @@ void ASTContext::addSearchPath(StringRef searchPath, bool isFramework) {
 
 void ASTContext::addModuleLoader(std::unique_ptr<ModuleLoader> loader,
                                  bool IsClang) {
-  if (IsClang) {
-    assert(!Impl.TheClangModuleLoader && "Already have a Clang module loader");
-    Impl.TheClangModuleLoader =
-      static_cast<ClangModuleLoader *>(loader.get());
-  }
   Impl.ModuleLoaders.push_back(std::move(loader));
 }
 
@@ -1066,18 +1061,6 @@ void ASTContext::loadExtensions(NominalTypeDecl *nominal,
                                 unsigned previousGeneration) {
   for (auto &loader : Impl.ModuleLoaders) {
     loader->loadExtensions(nominal, previousGeneration);
-  }
-}
-
-void ASTContext::loadObjCMethods(
-       ClassDecl *classDecl,
-       ObjCSelector selector,
-       bool isInstanceMethod,
-       unsigned previousGeneration,
-       llvm::TinyPtrVector<AbstractFunctionDecl *> &methods) {
-  for (auto &loader : Impl.ModuleLoaders) {
-    loader->loadObjCMethods(classDecl, selector, isInstanceMethod,
-                            previousGeneration, methods);
   }
 }
 
@@ -1091,10 +1074,6 @@ void ASTContext::verifyAllLoadedModules() const {
     assert(!M->getFiles().empty() || M->failedToLoad());
   }
 #endif
-}
-
-ClangModuleLoader *ASTContext::getClangModuleLoader() const {
-  return Impl.TheClangModuleLoader;
 }
 
 static void recordKnownProtocol(ModuleDecl *Stdlib, StringRef Name,
@@ -1126,12 +1105,6 @@ ModuleDecl *ASTContext::getLoadedModule(
 
 ModuleDecl *ASTContext::getLoadedModule(Identifier ModuleName) const {
   return LoadedModules.lookup(ModuleName);
-}
-
-void ASTContext::getVisibleTopLevelClangModules(
-    SmallVectorImpl<clang::Module*> &Modules) const {
-  getClangModuleLoader()->getClangPreprocessor().getHeaderSearchInfo().
-    collectAllModules(Modules);
 }
 
 ArchetypeBuilder *ASTContext::getOrCreateArchetypeBuilder(

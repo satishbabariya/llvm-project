@@ -1005,10 +1005,6 @@ ParserResult<Expr> Parser::parseExprPostfix(Diag<> ID, bool isExprBasic) {
       new (Context) DiscardAssignmentExpr(consumeToken(), /*Implicit=*/false));
     break;
 
-  case tok::pound_selector: // expr-selector
-    Result = parseExprSelector();
-    break;
-
   case tok::l_brace:     // expr-closure
     Result = parseExprClosure();
     break;

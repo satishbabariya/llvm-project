@@ -2344,7 +2344,6 @@ public:
       case SILFunctionTypeRepresentation::CFunctionPointer:
       case SILFunctionTypeRepresentation::Closure:
         return false;
-      case SILFunctionTypeRepresentation::ObjCMethod:
       case SILFunctionTypeRepresentation::Method:
       case SILFunctionTypeRepresentation::WitnessMethod:
         return true;
@@ -2361,7 +2360,6 @@ public:
         return true;
       case SILFunctionTypeRepresentation::Thin:
       case SILFunctionTypeRepresentation::Method:
-      case SILFunctionTypeRepresentation::ObjCMethod:
       case SILFunctionTypeRepresentation::WitnessMethod:
       case SILFunctionTypeRepresentation::CFunctionPointer:
       case SILFunctionTypeRepresentation::Closure:
@@ -3002,7 +3000,6 @@ public:
       case Representation::CFunctionPointer:
       case Representation::Closure:
         return false;
-      case Representation::ObjCMethod:
       case Representation::Method:
       case Representation::WitnessMethod:
         return true;
@@ -3017,7 +3014,6 @@ public:
       case Representation::Block:
       case Representation::Thin:
       case Representation::CFunctionPointer:
-      case Representation::ObjCMethod:
       case Representation::Closure:
         return false;
       case Representation::Method:
@@ -3036,7 +3032,6 @@ public:
         return true;
       case Representation::Thin:
       case Representation::CFunctionPointer:
-      case Representation::ObjCMethod:
       case Representation::Method:
       case Representation::WitnessMethod:
       case Representation::Closure:

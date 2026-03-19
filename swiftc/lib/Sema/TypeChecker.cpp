@@ -718,10 +718,6 @@ void swift::finishTypeChecking(SourceFile &SF) {
 
 void swift::performWholeModuleTypeChecking(SourceFile &SF) {
   auto &Ctx = SF.getASTContext();
-  Ctx.diagnoseAttrsRequiringFoundation(SF);
-  Ctx.diagnoseObjCMethodConflicts(SF);
-  Ctx.diagnoseObjCUnsatisfiedOptReqConflicts(SF);
-  Ctx.diagnoseUnintendedObjCMethodOverrides(SF);
 }
 
 bool swift::performTypeLocChecking(ASTContext &Ctx, TypeLoc &T,
@@ -791,12 +787,6 @@ static Optional<Type> getTypeOfCompletionContextExpr(
     // Handle below.
     break;
 
-  case CompletionTypeCheckKind::ObjCKeyPath:
-    referencedDecl = nullptr;
-    if (auto keyPath = dyn_cast<ObjCKeyPathExpr>(parsedExpr))
-      return TC.checkObjCKeyPathExpr(DC, keyPath, /*requireResultType=*/true);
-
-    return None;
   }
 
   Type originalType = parsedExpr->getType();
