@@ -960,23 +960,18 @@ ERROR(optional_attribute_non_protocol,none,
       "'optional' can only be applied to protocol members", ())
 ERROR(optional_attribute_initializer,none,
       "'optional' cannot be applied to an initializer", ())
-ERROR(unavailable_method_non_objc_protocol,none,
-      "protocol members can only be marked unavailable in an @objc protocol",
-      ())
 ERROR(missing_in_class_init_1,none,
-      "stored property %0 requires an initial value%select{| or should be "
-      "@NSManaged}1", (Identifier, bool))
+      "stored property %0 requires an initial value", (Identifier))
 ERROR(missing_in_class_init_2,none,
-      "stored properties %0 and %1 require initial values%select{| or should "
-      "be @NSManaged}2",
-      (Identifier, Identifier, bool))
+      "stored properties %0 and %1 require initial values",
+      (Identifier, Identifier))
 ERROR(missing_in_class_init_3plus,none,
       "stored properties %0, %1, %select{and %2|%2, and others}3 "
-      "require initial values%select{| or should be @NSManaged}4",
-      (Identifier, Identifier, Identifier, bool, bool))
+      "require initial values",
+      (Identifier, Identifier, Identifier, bool))
 NOTE(requires_stored_property_inits_here,none,
      "%select{superclass|class}1 %0 requires all stored properties to have "
-     "initial values%select{| or use @NSManaged}2", (Type, bool, bool))
+     "initial values", (Type, bool))
 ERROR(class_without_init,none,
       "class %0 has no initializers", (Type))
 NOTE(note_no_in_class_init_1,none,
@@ -1159,12 +1154,6 @@ ERROR(extension_protocol_via_typealias,none,
       "typealias", (Type))
 ERROR(extension_anyobject,none,
       "'AnyObject' protocol cannot be extended", ())
-ERROR(objc_generic_extension_using_type_parameter,none,
-      "extension of a generic Objective-C class cannot access the class's "
-      "generic parameters at runtime", ())
-NOTE(objc_generic_extension_using_type_parameter_here,none,
-     "generic parameter used here", ())
-
 // Protocols
 ERROR(type_does_not_conform,none,
       "type %0 does not conform to protocol %1", (Type, Type))
