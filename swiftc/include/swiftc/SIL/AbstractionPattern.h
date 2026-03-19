@@ -9,11 +9,6 @@
 
 #include "swiftc/AST/Types.h"
 
-namespace clang {
-class Type;
-class ObjCMethodDecl;
-} // namespace clang
-
 namespace swift {
 namespace Lowering {
 
@@ -26,7 +21,6 @@ public:
   explicit AbstractionPattern(CanType origType) : OrigType(origType) {}
   explicit AbstractionPattern(Type origType);
   explicit AbstractionPattern(CanGenericSignature signature, CanType origType);
-  explicit AbstractionPattern(CanType origType, const clang::Type *clangType);
 
   static AbstractionPattern getOpaque();
   static AbstractionPattern getInvalid();

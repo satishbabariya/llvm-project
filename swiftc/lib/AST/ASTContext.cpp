@@ -15,14 +15,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "swiftc/AST/ASTContext.h"
-#include "ForeignRepresentationInfo.h"
 #include "swiftc/Strings.h"
 #include "swiftc/AST/ArchetypeBuilder.h"
 #include "swiftc/AST/AST.h"
 #include "swiftc/AST/ConcreteDeclRef.h"
 #include "swiftc/AST/DiagnosticEngine.h"
 #include "swiftc/AST/DiagnosticsSema.h"
-#include "swiftc/AST/ForeignErrorConvention.h"
 #include "swiftc/AST/GenericEnvironment.h"
 #include "swiftc/AST/KnownProtocols.h"
 #include "swiftc/AST/LazyResolver.h"
@@ -36,10 +34,6 @@
 #include "swiftc/Basic/SourceManager.h"
 #include "swiftc/Basic/StringExtras.h"
 #include "swiftc/Parse/Lexer.h" // bad dependency
-#include "clang/AST/Attr.h"
-#include "clang/AST/DeclObjC.h"
-#include "clang/Lex/HeaderSearch.h"
-#include "clang/Lex/Preprocessor.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
@@ -52,7 +46,6 @@ using namespace swift;
 LazyResolver::~LazyResolver() = default;
 DelegatingLazyResolver::~DelegatingLazyResolver() = default;
 void ModuleLoader::anchor() {}
-void ClangModuleLoader::anchor() {}
 
 llvm::StringRef swift::getProtocolName(KnownProtocolKind kind) {
   switch (kind) {
@@ -65,12 +58,6 @@ llvm::StringRef swift::getProtocolName(KnownProtocolKind kind) {
 }
 
 namespace {
-  typedef std::tuple<ClassDecl *, ObjCSelector, bool> ObjCMethodConflict;
-
-  /// An unsatisfied, optional @objc requirement in a protocol conformance.
-  typedef std::pair<DeclContext *, AbstractFunctionDecl *>
-    ObjCUnsatisfiedOptReq;
-
   enum class SearchPathKind : uint8_t {
     Import = 1 << 0,
     Framework = 1 << 1
@@ -145,12 +132,6 @@ struct ASTContext::Implementation {
   /// The declaration of Swift.Void.
   TypeAliasDecl *VoidDecl = nullptr;
   
-  /// The declaration of ObjectiveC.ObjCBool.
-  StructDecl *ObjCBoolDecl = nullptr;
-
-  /// The declaration of Foundation.NSError.
-  ClassDecl *NSErrorDecl = nullptr;
-
   // Declare cached declarations for each of the known declarations.
 #define FUNC_DECL(Name, Id) FuncDecl *Get##Name = nullptr;
 #include "swiftc/AST/KnownDecls.def"
@@ -178,9 +159,6 @@ struct ASTContext::Implementation {
   /// ASTContext.
   SmallVector<std::unique_ptr<swift::ModuleLoader>, 4> ModuleLoaders;
 
-  /// \brief The module loader used to load Clang modules.
-  ClangModuleLoader *TheClangModuleLoader = nullptr;
-
   /// \brief Map from Swift declarations to raw comments.
   llvm::DenseMap<const Decl *, RawComment> RawComments;
 
@@ -190,11 +168,6 @@ struct ASTContext::Implementation {
   /// \brief Map from local declarations to their discriminators.
   /// Missing entries implicitly have value 0.
   llvm::DenseMap<const ValueDecl *, unsigned> LocalDiscriminators;
-
-  /// \brief Map from declarations to foreign error conventions.
-  /// This applies to both actual imported functions and to @objc functions.
-  llvm::DenseMap<const AbstractFunctionDecl *,
-                 ForeignErrorConvention> ForeignErrorConventions;
 
   /// Cache of previously looked-up precedence queries.
   AssociativityCacheType AssociativityCache;
@@ -224,11 +197,6 @@ struct ASTContext::Implementation {
   llvm::DenseMap<std::pair<const ClassDecl *, char>,
                  std::unique_ptr<InheritedNameSet>> AllProperties;
 
-  /// The set of property names that show up in the defining module of
-  /// an Objective-C class.
-  llvm::DenseMap<std::pair<const clang::ObjCInterfaceDecl *, char>,
-                 std::unique_ptr<InheritedNameSet>> AllPropertiesObjC;
-  
   /// The single-parameter generic signature with no constraints, <T>.
   CanGenericSignature SingleGenericParameterSignature;
 
@@ -309,23 +277,6 @@ struct ASTContext::Implementation {
   llvm::FoldingSet<GenericSignature> GenericSignatures;
   llvm::FoldingSet<DeclName::CompoundDeclName> CompoundNames;
   llvm::DenseMap<UUID, ArchetypeType *> OpenedExistentialArchetypes;
-
-  /// List of Objective-C member conflicts we have found during type checking.
-  std::vector<ObjCMethodConflict> ObjCMethodConflicts;
-
-  /// List of optional @objc protocol requirements that have gone
-  /// unsatisfied, which might conflict with other Objective-C methods.
-  std::vector<ObjCUnsatisfiedOptReq> ObjCUnsatisfiedOptReqs;
-
-  /// List of Objective-C methods created by the type checker (and not
-  /// by the Clang importer or deserialized), which is used for
-  /// checking unintended Objective-C overrides.
-  std::vector<AbstractFunctionDecl *> ObjCMethods;
-
-  /// A cache of information about whether particular nominal types
-  /// are representable in a foreign language.
-  llvm::DenseMap<NominalTypeDecl *, ForeignRepresentationInfo>
-    ForeignRepresentableCache;
 
   llvm::StringMap<OptionSet<SearchPathKind>> SearchPathsSet;
 

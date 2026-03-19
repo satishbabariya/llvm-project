@@ -1328,8 +1328,7 @@ public:
   static ImportDecl *create(ASTContext &C, DeclContext *DC,
                             SourceLoc ImportLoc, ImportKind Kind,
                             SourceLoc KindLoc,
-                            ArrayRef<AccessPathElement> Path,
-                            ClangNode ClangN = ClangNode());
+                            ArrayRef<AccessPathElement> Path);
 
   /// Returns the import kind that is most appropriate for \p VD.
   ///
@@ -1373,10 +1372,6 @@ public:
 
   ArrayRef<ValueDecl *> getDecls() const { return Decls; }
   void setDecls(ArrayRef<ValueDecl *> Ds) { Decls = Ds; }
-
-  const clang::Module *getClangModule() const {
-    return getClangNode().getClangModule();
-  }
 
   SourceLoc getStartLoc() const { return ImportLoc; }
   SourceLoc getLoc() const { return getFullAccessPath().front().second; }
@@ -1464,8 +1459,7 @@ public:
                                TypeLoc extendedType,
                                MutableArrayRef<TypeLoc> inherited,
                                DeclContext *parent,
-                               TrailingWhereClause *trailingWhereClause,
-                               ClangNode clangNode = ClangNode());
+                               TrailingWhereClause *trailingWhereClause);
 
   SourceLoc getStartLoc() const { return ExtensionLoc; }
   SourceLoc getLoc() const { return ExtensionLoc; }
@@ -2029,19 +2023,6 @@ public:
   /// names.
   DeclName getBaseName() const { return Name.getBaseName(); }
 
-  /// Retrieve the name to use for this declaration when interoperating
-  /// with the Objective-C runtime.
-  ///
-  /// \returns A "selector" containing the runtime name. For non-method
-  /// entities (classes, protocols, properties), this operation will
-  /// return a zero-parameter selector with the appropriate name in its
-  /// first slot.
-  Optional<ObjCSelector> getObjCRuntimeName() const;
-
-  /// Determine whether the given declaration can infer @objc, or the
-  /// Objective-C name, if used to satisfy the given requirement.
-  bool canInferObjCFromRequirement(ValueDecl *requirement);
-
   SourceLoc getNameLoc() const { return NameLoc; }
   SourceLoc getLoc() const { return NameLoc; }
 
@@ -2158,17 +2139,6 @@ public:
 
   /// Compute the overload signature for this declaration.
   OverloadSignature getOverloadSignature() const;
-
-  /// Returns true if the decl requires Objective-C interop.
-  ///
-  /// This can be true even if there is no 'objc' attribute on the declaration.
-  /// In that case it was inferred by the type checker and set with a call to
-  /// markAsObjC().
-  bool isObjC() const {
-    return getAttrs().hasAttribute<ObjCAttr>();
-  }
-  
-  void setIsObjC(bool Value);
 
   /// Is this declaration marked with 'final'?
   bool isFinal() const {
@@ -3189,16 +3159,9 @@ public:
     return NTD && classof(NTD);
   }
   
-  /// Returns true if the decl uses the Objective-C generics model.
-  ///
-  /// This is true of imported Objective-C classes.
-  bool usesObjCGenericsModel() const {
-    return isObjC() && hasClangNode() && isGenericContext();
-  }
-  
   /// True if the class is known to be implemented in Swift.
   bool hasKnownSwiftImplementation() const {
-    return !hasClangNode();
+    return true;
   }
 };
 
@@ -3433,10 +3396,6 @@ public:
   bool isInheritedProtocolsValid() const {
     return InheritedProtocolsSet;
   }
-
-  /// Retrieve the name to use for this protocol when interoperating
-  /// with the Objective-C runtime.
-  StringRef getObjCRuntimeName(llvm::SmallVectorImpl<char> &buffer) const;
 
   /// Create the implicit generic parameter list for a protocol or
   /// extension thereof.
@@ -3956,14 +3915,6 @@ public:
   /// getters and setters.
   bool requiresForeignGetterAndSetter() const;
 
-  /// Given that this is an Objective-C property or subscript declaration,
-  /// produce its getter selector.
-  ObjCSelector getObjCGetterSelector(LazyResolver *resolver = nullptr) const;
-
-  /// Given that this is an Objective-C property or subscript declaration,
-  /// produce its setter selector.
-  ObjCSelector getObjCSetterSelector(LazyResolver *resolver = nullptr) const;
-
   AbstractStorageDecl *getOverriddenDecl() const {
     return OverriddenDecl;
   }
@@ -4197,19 +4148,6 @@ public:
     VarDeclBits.IsDebuggerVar = IsDebuggerVar;
   }
 
-  /// Return the Objective-C runtime name for this property.
-  Identifier getObjCPropertyName() const;
-
-  /// Retrieve the default Objective-C selector for the getter of a
-  /// property of the given name.
-  static ObjCSelector getDefaultObjCGetterSelector(ASTContext &ctx,
-                                                   Identifier propertyName);
-
-  /// Retrieve the default Objective-C selector for the setter of a
-  /// property of the given name.
-  static ObjCSelector getDefaultObjCSetterSelector(ASTContext &ctx,
-                                                   Identifier propertyName);
-
   /// If this is a simple 'let' constant, emit a note with a fixit indicating
   /// that it can be rewritten to a 'var'.  This is used in situations where the
   /// compiler detects obvious attempts to mutate a constant.
@@ -4343,18 +4281,6 @@ public:
   }
 };
   
-/// Describes the kind of subscripting used in Objective-C.
-enum class ObjCSubscriptKind {
-  /// Not an Objective-C subscripting kind.
-  None,
-  /// Objective-C indexed subscripting, which is based on an integral
-  /// index.
-  Indexed,
-  /// Objective-C keyed subscripting, which is based on an object
-  /// argument or metatype thereof.
-  Keyed
-};
-
 /// \brief Declares a subscripting operator for a type.
 ///
 /// A subscript declaration is defined as a get/set pair that produces a
@@ -4417,10 +4343,6 @@ public:
 
   /// \brief Returns whether the result of the subscript operation can be set.
   bool isSettable() const;
-
-  /// Determine the kind of Objective-C subscripting this declaration
-  /// implies.
-  ObjCSubscriptKind getObjCSubscriptKind(LazyResolver *resolver) const;
 
   SubscriptDecl *getOverriddenDecl() const {
     return cast_or_null<SubscriptDecl>(
@@ -4684,13 +4606,6 @@ public:
 
   CaptureInfo &getCaptureInfo() { return Captures; }
   const CaptureInfo &getCaptureInfo() const { return Captures; }
-
-  /// Retrieve the Objective-C selector that names this method.
-  ObjCSelector getObjCSelector(LazyResolver *resolver = nullptr) const;
-
-  /// Determine whether the given method would produce an Objective-C
-  /// instance method.
-  bool isObjCInstanceMethod() const;
 
   /// Determine the default argument kind and type for the given argument index
   /// in this declaration, which must be a function or constructor.

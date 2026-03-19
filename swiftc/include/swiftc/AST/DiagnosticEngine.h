@@ -69,7 +69,6 @@ namespace swift {
     Integer,
     Unsigned,
     Identifier,
-    ObjCSelector,
     Type,
     TypeRepr,
     PatternKind,
@@ -95,14 +94,13 @@ namespace swift {
       unsigned UnsignedVal;
       StringRef StringVal;
       DeclName IdentifierVal;
-      ObjCSelector ObjCSelectorVal;
       Type TypeVal;
       TypeRepr *TyR;
       PatternKind PatternKindVal;
       StaticSpellingKind StaticSpellingKindVal;
       DescriptiveDeclKind DescriptiveDeclKindVal;
       const DeclAttribute *DeclAttributeVal;
-      clang::VersionTuple VersionVal;
+      llvm::VersionTuple VersionVal;
       LayoutConstraint LayoutConstraintVal;
     };
     
@@ -125,10 +123,6 @@ namespace swift {
     
     DiagnosticArgument(Identifier I)
       : Kind(DiagnosticArgumentKind::Identifier), IdentifierVal(I) {
-    }
-
-    DiagnosticArgument(ObjCSelector S)
-      : Kind(DiagnosticArgumentKind::ObjCSelector), ObjCSelectorVal(S) {
     }
 
     DiagnosticArgument(Type T)
@@ -164,7 +158,7 @@ namespace swift {
         : Kind(DiagnosticArgumentKind::DeclAttribute),
           DeclAttributeVal(attr) {}
 
-    DiagnosticArgument(clang::VersionTuple version)
+    DiagnosticArgument(llvm::VersionTuple version)
       : Kind(DiagnosticArgumentKind::VersionTuple),
         VersionVal(version) { }
 
@@ -202,11 +196,6 @@ namespace swift {
       return IdentifierVal;
     }
 
-    ObjCSelector getAsObjCSelector() const {
-      assert(Kind == DiagnosticArgumentKind::ObjCSelector);
-      return ObjCSelectorVal;
-    }
-
     Type getAsType() const {
       assert(Kind == DiagnosticArgumentKind::Type);
       return TypeVal;
@@ -237,7 +226,7 @@ namespace swift {
       return DeclAttributeVal;
     }
 
-    clang::VersionTuple getAsVersionTuple() const {
+    llvm::VersionTuple getAsVersionTuple() const {
       assert(Kind == DiagnosticArgumentKind::VersionTuple);
       return VersionVal;
     }

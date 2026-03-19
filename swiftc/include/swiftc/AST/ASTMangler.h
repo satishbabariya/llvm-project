@@ -49,8 +49,6 @@ public:
     Default,
     VTableMethod,
     DynamicThunk,
-    SwiftAsObjCThunk,
-    ObjCAsSwiftThunk,
     DirectMethodReferenceThunk,
   };
 

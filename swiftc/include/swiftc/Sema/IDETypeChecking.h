@@ -74,9 +74,6 @@ namespace swift {
   enum class CompletionTypeCheckKind {
     /// Type check the expression as normal.
     Normal,
-
-    /// Type check the argument to an Objective-C #keyPath.
-    ObjCKeyPath,
   };
 
   /// \brief Return the type of an expression parsed during code completion, or
