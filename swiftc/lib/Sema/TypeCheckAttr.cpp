@@ -495,10 +495,6 @@ public:
     IGNORED_ATTR(Effects)
     IGNORED_ATTR(Exported)
     IGNORED_ATTR(FixedLayout)
-    IGNORED_ATTR(GKInspectable)
-    IGNORED_ATTR(IBDesignable)
-    IGNORED_ATTR(IBInspectable)
-    IGNORED_ATTR(IBOutlet) // checked early.
     IGNORED_ATTR(Indirect)
     IGNORED_ATTR(Inline)
     IGNORED_ATTR(Inlineable)
@@ -507,12 +503,7 @@ public:
     IGNORED_ATTR(Mutating)
     IGNORED_ATTR(NoEscape)
     IGNORED_ATTR(NonMutating)
-    IGNORED_ATTR(NonObjC)
     IGNORED_ATTR(NoReturn)
-    IGNORED_ATTR(NSManaged) // checked early.
-    IGNORED_ATTR(ObjC)
-    IGNORED_ATTR(ObjCBridged)
-    IGNORED_ATTR(ObjCNonLazyRealization)
     IGNORED_ATTR(Optional)
     IGNORED_ATTR(Ownership)
     IGNORED_ATTR(Override)
@@ -533,8 +524,6 @@ public:
   void visitCDeclAttr(CDeclAttr *attr);
 
   void visitFinalAttr(FinalAttr *attr);
-  void visitIBActionAttr(IBActionAttr *attr);
-  void visitNSCopyingAttr(NSCopyingAttr *attr);
   void visitRequiredAttr(RequiredAttr *attr);
   void visitRethrowsAttr(RethrowsAttr *attr);
 

@@ -1374,16 +1374,9 @@ NOTE(protocol_conformance_implied_here,none,
 WARNING(optional_req_near_match,none,
         "%0 %1 nearly matches optional requirement %2 of protocol %3",
         (DescriptiveDeclKind, DeclName, DeclName, DeclName))
-NOTE(optional_req_nonobjc_near_match_add_objc,none,
-     "add '@objc' to provide an Objective-C entrypoint", ())
-NOTE(optional_req_nonobjc_to_objc,none,
-     "rename to %0 to satisfy this requirement",
-     (DeclName))
 NOTE(optional_req_near_match_move,none,
      "move %0 to %select{an|another}1 extension to silence this warning",
      (DeclName, unsigned))
-NOTE(optional_req_near_match_nonobjc,none,
-     "add '@nonobjc' to silence this %select{warning|error}0", (bool))
 NOTE(optional_req_near_match_accessibility,none,
      "make %0 %select{ERROR|private|private|non-public|non-public}1 to silence this "
      "warning", (DeclName, Accessibility))
@@ -1402,8 +1395,6 @@ NOTE(protocol_here,none,
      "protocol %0 declared here", (Identifier))
 ERROR(protocol_composition_not_protocol,none,
       "non-protocol type %0 cannot be used within a protocol composition", (Type))
-ERROR(objc_protocol_inherits_non_objc_protocol,none,
-      "@objc protocol %0 cannot refine non-@objc protocol %1", (Type, Type))
 WARNING(protocol_composition_with_postfix,none,
         "protocol composition with postfix '%0' is ambiguous "
         "and will be rejected in future version of Swift", (StringRef))
@@ -1476,13 +1467,6 @@ ERROR(override_decl_extension,none,
       "%select{override|be overridden}0 yet", (bool))
 NOTE(overridden_here,none,
      "overridden declaration is here", ())
-ERROR(override_objc_type_mismatch_method,none,
-      "overriding method with selector %0 has incompatible type %1",
-      (ObjCSelector, Type))
-ERROR(override_objc_type_mismatch_subscript,none,
-      "overriding %select{|indexed |keyed }0subscript with incompatible type "
-      "%1",
-      (unsigned, Type))
 NOTE(overridden_here_with_type,none,
      "overridden declaration here has type %0", (Type))
 ERROR(missing_override,none,

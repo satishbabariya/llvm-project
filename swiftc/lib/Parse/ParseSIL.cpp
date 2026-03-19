@@ -688,7 +688,6 @@ static bool parseDeclSILOptional(bool *isTransparent, bool *isFragile,
                                  Inline_t *inlineStrategy, bool *isLet,
                                  SmallVectorImpl<std::string> *Semantics,
                                  SmallVectorImpl<ParsedSpecAttr> *SpecAttrs,
-                                 ValueDecl **ClangDecl,
                                  EffectsKind *MRK, SILParser &SP) {
   while (SP.P.consumeIf(tok::l_square)) {
     if (isLet && SP.P.Tok.is(tok::kw_let)) {
@@ -747,14 +746,6 @@ static bool parseDeclSILOptional(bool *isTransparent, bool *isFragile,
         return true;
 
       SpecAttrs->emplace_back(SpecAttr);
-
-      SP.P.parseToken(tok::r_square, diag::expected_in_attribute_list);
-      continue;
-    }
-    else if (ClangDecl && SP.P.Tok.getText() == "clang") {
-      SP.P.consumeToken(tok::identifier);
-      if (SP.parseSILDottedPathWithoutPound(*ClangDecl))
-        return true;
 
       SP.P.parseToken(tok::r_square, diag::expected_in_attribute_list);
       continue;
