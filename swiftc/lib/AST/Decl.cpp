@@ -22,7 +22,6 @@
 #include "swiftc/AST/DiagnosticEngine.h"
 #include "swiftc/AST/DiagnosticsSema.h"
 #include "swiftc/AST/Expr.h"
-#include "swiftc/AST/ForeignErrorConvention.h"
 #include "swiftc/AST/GenericEnvironment.h"
 #include "swiftc/AST/Initializer.h"
 #include "swiftc/AST/LazyResolver.h"
@@ -30,7 +29,6 @@
 #include "swiftc/AST/ParameterList.h"
 #include "swiftc/AST/ResilienceExpansion.h"
 #include "swiftc/AST/TypeLoc.h"
-#include "clang/Lex/MacroInfo.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
@@ -38,10 +36,6 @@
 #include "swiftc/Basic/Range.h"
 #include "swiftc/Basic/StringExtras.h"
 #include "swiftc/Basic/Fallthrough.h"
-
-#include "clang/Basic/CharInfo.h"
-#include "clang/AST/Attr.h"
-#include "clang/AST/DeclObjC.h"
 
 #include <algorithm>
 

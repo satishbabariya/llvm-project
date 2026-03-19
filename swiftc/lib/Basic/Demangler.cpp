@@ -790,7 +790,6 @@ NodePointer Demangler::demangleImplFunctionType() {
     case 'B': FAttr = "@convention(block)"; break;
     case 'C': FAttr = "@convention(c)"; break;
     case 'M': FAttr = "@convention(method)"; break;
-    case 'O': FAttr = "@convention(objc_method)"; break;
     case 'K': FAttr = "@convention(closure)"; break;
     case 'W': FAttr = "@convention(witness_method)"; break;
     default:
@@ -1014,12 +1013,9 @@ NodePointer Demangler::popProtocolConformance() {
 NodePointer Demangler::demangleThunkOrSpecialization() {
   switch (char c = nextChar()) {
     case 'c': return createWithChild(Node::Kind::CurryThunk, popNode(isEntity));
-    case 'o': return NodeFactory::create(Node::Kind::ObjCAttribute);
-    case 'O': return NodeFactory::create(Node::Kind::NonObjCAttribute);
     case 'D': return NodeFactory::create(Node::Kind::DynamicAttribute);
     case 'd': return NodeFactory::create(Node::Kind::DirectMethodReferenceAttribute);
     case 'V': return NodeFactory::create(Node::Kind::VTableAttribute);
-    case 'a': return NodeFactory::create(Node::Kind::PartialApplyObjCForwarder);
     case 'A': return NodeFactory::create(Node::Kind::PartialApplyForwarder);
     case 'W': {
       NodePointer Entity = popNode(isEntity);
