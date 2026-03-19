@@ -18,7 +18,7 @@
 #include "swiftc/Basic/LLVM.h"
 #include "swiftc/Basic/SourceLoc.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 
 namespace swift {
   class AbstractFunctionDecl;

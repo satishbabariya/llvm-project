@@ -20,7 +20,7 @@
 
 #include "swiftc/AST/ForeignErrorConvention.h"
 #include "swiftc/Basic/LLVM.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 
 namespace swift {
 

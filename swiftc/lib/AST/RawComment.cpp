@@ -23,7 +23,6 @@
 #include "swiftc/AST/PrettyStackTrace.h"
 #include "swiftc/Basic/PrimitiveParsing.h"
 #include "swiftc/Basic/SourceManager.h"
-#include "swiftc/Markup/Markup.h"
 #include "swiftc/Parse/Lexer.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
@@ -143,7 +142,6 @@ RawComment Decl::getRawComment() const {
   if (auto *Unit =
           dyn_cast<FileUnit>(this->getDeclContext()->getModuleScopeContext())) {
     if (Optional<CommentInfo> C = Unit->getCommentForDecl(this)) {
-      swift::markup::MarkupContext MC;
       Context.setBriefComment(this, C->Brief);
       Context.setRawComment(this, C->Raw);
       return C->Raw;
@@ -210,8 +208,7 @@ static StringRef extractBriefComment(ASTContext &Context, RawComment RC,
   if (!D->canHaveComment())
     return StringRef();
 
-  swift::markup::MarkupContext MC;
-  auto DC = getCascadingDocComment(MC, D);
+  auto DC = getCascadingDocComment(D);
   if (!DC.hasValue())
     return StringRef();
 
@@ -219,13 +216,7 @@ static StringRef extractBriefComment(ASTContext &Context, RawComment RC,
   if (!Brief.hasValue())
     return StringRef();
 
-  SmallString<256> BriefStr("");
-  llvm::raw_svector_ostream OS(BriefStr);
-  swift::markup::printInlinesUnder(Brief.getValue(), OS);
-  if (OS.str().empty())
-    return StringRef();
-
-  return Context.AllocateCopy(OS.str());
+  return Brief.getValue();
 }
 
 StringRef Decl::getBriefComment() const {

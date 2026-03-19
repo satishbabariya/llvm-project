@@ -16,7 +16,7 @@
 #include "swiftc/Basic/STLExtras.h"
 #include "swiftc/AST/AttrKind.h"
 #include "swiftc/AST/Identifier.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 #include <limits.h>
 #include <vector>
 

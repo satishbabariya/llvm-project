@@ -20,7 +20,7 @@
 #include "swiftc/AST/SubstitutionMap.h"
 #include "swiftc/AST/Type.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 
 namespace llvm {
   class raw_ostream;

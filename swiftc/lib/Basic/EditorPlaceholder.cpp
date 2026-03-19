@@ -16,7 +16,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "swiftc/Basic/EditorPlaceholder.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 
 using namespace swift;
 using namespace llvm;

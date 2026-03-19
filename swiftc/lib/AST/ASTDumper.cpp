@@ -25,7 +25,7 @@
 #include "swiftc/AST/TypeVisitor.h"
 #include "swiftc/Basic/STLExtras.h"
 #include "llvm/ADT/APFloat.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Process.h"

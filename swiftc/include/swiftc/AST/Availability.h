@@ -20,7 +20,7 @@
 #include "swiftc/AST/Type.h"
 #include "swiftc/Basic/LLVM.h"
 #include "clang/Basic/VersionTuple.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 
 namespace swift {
 class ASTContext;

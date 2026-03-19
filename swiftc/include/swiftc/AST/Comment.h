@@ -13,80 +13,39 @@
 #ifndef SWIFTC_AST_COMMENT_H
 #define SWIFTC_AST_COMMENT_H
 
-#include "swiftc/Markup/Markup.h"
-#include "llvm/ADT/Optional.h"
+#include "swiftc/Basic/LLVM.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace swift {
 class Decl;
-class DocComment;
-struct RawComment;
 
+/// A parsed documentation comment attached to a declaration.
+/// Stores only the brief summary as a plain string — no Markup AST needed.
 class DocComment {
   const Decl *D;
-  const swift::markup::Document *Doc = nullptr;
-  const swift::markup::CommentParts Parts;
+  StringRef Brief;
 
 public:
-  DocComment(const Decl *D, swift::markup::Document *Doc,
-             swift::markup::CommentParts Parts)
-      : D(D), Doc(Doc), Parts(Parts) {}
+  DocComment(const Decl *D, StringRef Brief) : D(D), Brief(Brief) {}
 
   const Decl *getDecl() const { return D; }
 
-  const swift::markup::Document *getDocument() const { return Doc; }
-
-  swift::markup::CommentParts getParts() const {
-    return Parts;
+  Optional<StringRef> getBrief() const {
+    if (Brief.empty())
+      return None;
+    return Brief;
   }
 
-  Optional<const swift::markup::Paragraph *> getBrief() const {
-    return Parts.Brief;
-  }
-
-  Optional<const swift::markup::ReturnsField * >getReturnsField() const {
-    return Parts.ReturnsField;
-  }
-
-  Optional<const swift::markup::ThrowsField*> getThrowsField() const {
-    return Parts.ThrowsField;
-  }
-
-  ArrayRef<const swift::markup::ParamField *> getParamFields() const {
-    return Parts.ParamFields;
-  }
-
-  ArrayRef<const swift::markup::MarkupASTNode *> getBodyNodes() const {
-    return Parts.BodyNodes;
-  }
-
-  bool isEmpty() const {
-    return Parts.isEmpty();
-  }
-
-  // Only allow allocation using the allocator in MarkupContext or by
-  // placement new.
-  void *operator new(size_t Bytes, swift::markup::MarkupContext &MC,
-                     unsigned Alignment = alignof(DocComment));
-  void *operator new(size_t Bytes, void *Mem) {
-    assert(Mem);
-    return Mem;
-  }
-
-  // Make vanilla new/delete illegal.
-  void *operator new(size_t Bytes) = delete;
-  void operator delete(void *Data) = delete;
+  bool isEmpty() const { return Brief.empty(); }
 };
 
 /// Get a parsed documentation comment for the declaration, if there is one.
-Optional<DocComment *>getSingleDocComment(swift::markup::MarkupContext &Context,
-                                          const Decl *D);
+Optional<DocComment *> getSingleDocComment(const Decl *D);
 
 /// Attempt to get a doc comment from the declaration, or other inherited
 /// sources, like from base classes or protocols.
-Optional<DocComment *> getCascadingDocComment(swift::markup::MarkupContext &MC,
-                                             const Decl *D);
+Optional<DocComment *> getCascadingDocComment(const Decl *D);
 
 } // namespace swift
 
-#endif // LLVM_SWIFT_AST_COMMENT_H
-
+#endif // SWIFTC_AST_COMMENT_H

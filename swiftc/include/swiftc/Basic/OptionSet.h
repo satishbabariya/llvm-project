@@ -17,7 +17,7 @@
 #ifndef SWIFTC_BASIC_OPTIONSET_H
 #define SWIFTC_BASIC_OPTIONSET_H
 
-#include "llvm/ADT/None.h"
+// llvm/ADT/None.h removed - using std::nullopt via LLVM.h
 
 #include <type_traits>
 #include <cstdint>

@@ -14,7 +14,7 @@
 #define SWIFTC_BASIC_SOURCEMANAGER_H
 
 #include "swiftc/Basic/SourceLoc.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/SourceMgr.h"
 #include <map>

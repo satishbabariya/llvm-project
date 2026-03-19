@@ -52,7 +52,6 @@ add_swiftc_library(SwiftAST
 
   LINK_LIBS
   SwiftBasic
-  SwiftMarkup
   SwiftSupport
 
   LINK_COMPONENTS

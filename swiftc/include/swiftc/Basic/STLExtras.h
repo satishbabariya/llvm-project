@@ -18,7 +18,7 @@
 #define SWIFTC_BASIC_INTERLEAVE_H
 
 #include "swiftc/Basic/LLVM.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Casting.h"
 #include <cassert>

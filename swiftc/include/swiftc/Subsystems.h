@@ -22,7 +22,7 @@
 #include "swiftc/Basic/Version.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/Optional.h"
+#include <optional> // was llvm/ADT/Optional.h
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Mutex.h"
 
