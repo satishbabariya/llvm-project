@@ -18,6 +18,8 @@
 #include "swiftc/FrontendTool/Utils.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/OptTable.h"
